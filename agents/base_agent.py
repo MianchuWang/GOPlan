@@ -1,0 +1,75 @@
+import torch
+import numpy as np
+from sklearn.preprocessing import StandardScaler
+
+
+class BaseAgent(object):
+    def __init__(self, *args, **kwargs):
+        self.replay_buffer = kwargs['replay_buffer']
+        self.state_dim = kwargs['state_dim']
+        self.ac_dim = kwargs['ac_dim']
+        self.goal_dim = kwargs['goal_dim']
+        self.device = kwargs['device']
+        self.discount = kwargs['discount']
+        self.max_steps = kwargs['max_steps']
+        self.normalise = kwargs['normalise']
+
+        self.goal_scaler = StandardScaler()
+        self.state_scaler = StandardScaler()
+        self.diff_scaler = StandardScaler()
+
+        self.get_goal_from_state = kwargs['get_goal_from_state']
+        self.compute_reward = kwargs['compute_reward']
+
+        self.fit_scalars()
+
+    def reset(self):
+        return
+
+    def get_action(self, state, goal):
+        raise NotImplementedError()
+
+    def plan(self, state, goal):
+        raise self.get_action(state, goal)
+
+    def train_models(self):
+        raise NotImplementedError()
+
+    def fit_scalars(self, state_noise=0.05, diff_noise=0.01, goal_noise=0.05):
+        _, high = self.replay_buffer.get_bounds()
+        states = self.replay_buffer.obs[:high].reshape(-1, self.state_dim)
+        next_states = self.replay_buffer.next_obs[:high].reshape(-1, self.state_dim)
+        goals = self.replay_buffer.goals[:high].reshape(-1, self.goal_dim)
+        diff = next_states - states  # For dynamics model training
+
+        self.goal_scaler.fit(goals + goal_noise * np.random.randn(*goals.shape))
+        self.state_scaler.fit(states + state_noise * np.random.randn(*states.shape))
+        self.diff_scaler.fit(diff + diff_noise * np.random.randn(*diff.shape))
+
+    def preprocess(self, states=None, actions=None, next_states=None, goals=None):
+
+        if states is not None:
+            if self.normalise:
+                states = self.state_scaler.transform(states)
+            states = torch.tensor(states, dtype=torch.float32, device=self.device)
+
+        if actions is not None:
+            actions = torch.tensor(actions, dtype=torch.float32, device=self.device)
+
+        if next_states is not None:
+            if self.normalise:
+                next_states = self.state_scaler.transform(next_states)
+            next_states = torch.tensor(next_states, dtype=torch.float32, device=self.device)
+
+        if goals is not None:
+            if self.normalise:
+                goals = self.goal_scaler.transform(goals)
+            goals = torch.tensor(goals, dtype=torch.float32, device=self.device)
+
+        return states, actions, next_states, goals
+
+    def load(self):
+        raise NotImplementedError()
+
+    def save(self):
+        raise NotImplementedError()
