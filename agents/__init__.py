@@ -1,5 +1,6 @@
 from agents.gcsl import GCSL
 from agents.bc import BC
+from agents.ago import AGO
 
 
 def return_agent(**agent_params):

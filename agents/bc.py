@@ -8,12 +8,13 @@ class BC(BaseAgent):
     def __init__(self, **agent_params):
         super().__init__(**agent_params)
         self.policy = Policy(self.state_dim, self.ac_dim, self.goal_dim).to(device=self.device)
-        self.policy_opt = torch.optim.Adam(self.policy.parameters(), lr=1e-3)
+        self.policy_opt = torch.optim.Adam(self.policy.parameters(), lr=5e-4)
+        self.sample_func = self.replay_buffer.sample
+        self.her_prob = 0
 
     def train_models(self, batch_size=512):
-        states, actions, _, goals = self.replay_buffer.sample_her(batch_size, her_prob=0.0)
-        states_prep, actions_prep, _, goals_prep = \
-            self.preprocess(states=states, actions=actions, goals=goals)
+        states, actions, _, goals = self.sample_func(batch_size, self.her_prob)
+        states_prep, actions_prep, _, goals_prep = self.preprocess(states=states, actions=actions, goals=goals)
 
         ac_dist, _ = self.policy(states_prep, goals_prep)
         log_prob = ac_dist.log_prob(actions_prep)
@@ -29,5 +30,5 @@ class BC(BaseAgent):
         with torch.no_grad():
             state_prep, _, _, goal_prep = \
                 self.preprocess(states=state[np.newaxis], goals=goal[np.newaxis])
-            _, action = self.policy(state_prep, goal_prep)
+            ac_dist, action = self.policy(state_prep, goal_prep)
         return action.cpu().numpy().squeeze()

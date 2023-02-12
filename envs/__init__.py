@@ -1,7 +1,7 @@
 import gymnasium as gym
 
-gym_robotics = ['FetchReach-v3', 'FetchPush-v2', 'FetchPickAndPlace-v3',
-                'FetchSlide-v3', 'HandReach-v0']
+gym_robotics = ['FetchReach-v3', 'FetchPush-v2', 'FetchPickAndPlace-v2',
+                'FetchSlide-v2', 'HandReach-v0']
 
 def get_goal_from_state(env_name):
     if env_name.startswith('FetchReach'):
@@ -17,9 +17,8 @@ def get_goal_from_state(env_name):
     else:
         raise Exception('Invalid environment.')
 
-def return_environment(env_name, render):
+def return_environment(env_name, render_mode):
     if env_name in gym_robotics:
-        render_mode = 'human' if render else None
         env = gym.make(env_name, render_mode=render_mode)
         return GymWrapper(env), \
                {'state_dim': env.observation_space['observation'].shape[0],

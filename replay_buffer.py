@@ -48,8 +48,8 @@ class ReplayBuffer:
         boarder = self.entries if self.is_full else self.curr_ptr
         return 0, boarder
 
-    def sample_her(self, batch_size, her_prob=0):
-        low, high = self.get_bounds()
+    def sample(self, batch_size, her_prob=0):
+        _, high = self.get_bounds()
         entry = np.random.randint(0, high, batch_size)
         index = np.random.randint(0, self.traj_len[entry])
         ret_obs = self.obs[entry, index]
@@ -62,18 +62,3 @@ class ReplayBuffer:
         ret_goals = self.get_goal_from_state(self.next_obs[entry, goal_index]) * replace[..., np.newaxis] + \
                     self.goals[entry, 0] * (1 - replace[..., np.newaxis])
         return ret_obs, ret_actions, ret_next_obs, ret_goals
-
-    def sample_sequence(self, batch_size, tau):
-        high = self.get_high()
-        entry = np.random.randint(0, high, batch_size)
-        index = np.random.randint(0, self.traj_len[entry] - tau, batch_size)
-        ret_obs = np.concatenate([self.obs[entry, np.newaxis, index + t] for t in range(tau)], axis=1)
-        ret_next_obs = np.concatenate([self.next_obs[entry, np.newaxis, index + t] for t in range(tau)], axis=1)
-        ret_actions = np.concatenate([self.actions[entry, np.newaxis, index + t] for t in range(tau)], axis=1)
-        goal_index = np.random.randint(index + tau, self.traj_len[entry], batch_size)
-        ret_goals = self.get_goal_from_state(self.obs[entry, np.newaxis, goal_index]).repeat(tau, axis=1)
-
-        return_to_go = index + tau - goal_index
-        return_to_go = np.concatenate([return_to_go[:, np.newaxis, np.newaxis] - i
-                                       for i in range(tau, 0, -1)], axis=1)
-        return ret_obs, ret_actions, ret_next_obs, ret_goals, return_to_go
