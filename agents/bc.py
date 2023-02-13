@@ -31,4 +31,5 @@ class BC(BaseAgent):
             state_prep, _, _, goal_prep = \
                 self.preprocess(states=state[np.newaxis], goals=goal[np.newaxis])
             ac_dist, action = self.policy(state_prep, goal_prep)
-        return action.cpu().numpy().squeeze()
+        #return action.cpu().numpy().squeeze()
+        return ac_dist.sample().cpu().numpy().squeeze()

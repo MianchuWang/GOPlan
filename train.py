@@ -3,31 +3,35 @@ import random
 import torch
 import numpy as np
 import wandb
+import seaborn
+import matplotlib.pyplot as plt
 
 from tqdm import tqdm
+
 
 from replay_buffer import ReplayBuffer
 from envs import return_environment
 from agents import return_agent
+from controller import Controller
 
 parser = argparse.ArgumentParser()
-parser.add_argument('--env_name', type=str, default='FetchReach-v3')
-parser.add_argument('--dataset', type=str, default='datasets/gym/expert/FetchReach')
-parser.add_argument('--agent', type=str, default='ago')
+parser.add_argument('--env_name', type=str, default='bandit')
+parser.add_argument('--dataset', type=str, default='datasets/bandit/bandit')
+parser.add_argument('--agent', type=str, default='gcsl')
 parser.add_argument('--buffer_capacity', type=int, default=400_0000)
 parser.add_argument('--discount', type=float, default=0.98)
-parser.add_argument('--normalise', type=bool, default=True)
+parser.add_argument('--normalise', type=int, choices=[0, 1], default=1)
 parser.add_argument('--render_mode', type=str, default=None)
 parser.add_argument('--seed', type=int, default=200)
 
-parser.add_argument('--enable_wandb', type=bool, default=True)
-parser.add_argument('--pretrain_steps', type=int, default=100000)
-parser.add_argument('--eval_episodes', type=int, default=200)
+parser.add_argument('--enable_wandb', type=int, choices=[0, 1], default=0)
+parser.add_argument('--pretrain_steps', type=int, default=10000)
+parser.add_argument('--eval_episodes', type=int, default=100000)
 args = parser.parse_args()
 print(args)
 
 if args.enable_wandb:
-    wandb.init(project='AGO')
+    wandb.init(project='AGO', config=args)
 device = "cuda" if torch.cuda.is_available() else "cpu"
 env, env_info = return_environment(args.env_name, render_mode=args.render_mode)
 random.seed(args.seed)
@@ -46,19 +50,16 @@ agent = return_agent(agent=args.agent, replay_buffer=buffer, state_dim=env_info[
                      get_goal_from_state=env_info['get_goal_from_state'],
                      compute_reward=env_info['compute_reward'])
 
-for i in tqdm(range(args.pretrain_steps)):
-    training_info = agent.train_models()
-    if args.enable_wandb:
-        wandb.log(training_info)
+controller = Controller(pretrain_steps=args.pretrain_steps, eval_episodes=args.eval_episodes,
+                        enable_wandb=args.enable_wandb, env=env, env_info=env_info,
+                        agent=agent, buffer=buffer)
 
-returns = []
-for i in tqdm(range(args.eval_episodes)):
-    agent.reset()
-    obs = env.reset(seed=np.random.randint(1e10))[0]
-    for step in range(env_info['max_steps']):
-        action = agent.get_action(obs['observation'], obs['desired_goal'])
-        obs, reward, _, _, info = env.step(action)
-        returns.append(reward)
+controller.train()
+actions = controller.eval()
 
-mean_return = np.array(returns).sum() / args.eval_episodes
-print('The return is', mean_return)
+#seaborn.histplot(buffer.actions[:buffer.curr_ptr].squeeze(), bins=20, binrange=(-1.4, 1.4),
+#                 stat='density', color='white')
+seaborn.lineplot(x=np.arange(-2, 2, 0.01), y=env.compute_reward(np.arange(-2, 2, 0.01)),
+                 linewidth=2, color='black')
+seaborn.histplot(actions, bins=20, binrange=(-1.4, 1.4), stat='density', edgecolor='red', color='white')
+plt.show()

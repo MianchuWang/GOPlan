@@ -2,6 +2,7 @@ import gymnasium as gym
 
 gym_robotics = ['FetchReach-v3', 'FetchPush-v2', 'FetchPickAndPlace-v2',
                 'FetchSlide-v2', 'HandReach-v0']
+bandit_env = ['bandit']
 
 def get_goal_from_state(env_name):
     if env_name.startswith('FetchReach'):
@@ -27,6 +28,16 @@ def return_environment(env_name, render_mode):
                 'max_steps': env._max_episode_steps,
                 'get_goal_from_state': get_goal_from_state(env_name),
                 'compute_reward': env.compute_reward}
+    elif env_name in bandit_env:
+        from envs.bandit import Bandit
+        env = Bandit()
+        return env, \
+               {'state_dim': env.state_dim,
+                'goal_dim': env.goal_dim,
+                'ac_dim': env.ac_dim,
+                'max_steps': env._max_episode_steps,
+                'get_goal_from_state': lambda x : x,
+                'compute_reward': None}
     else:
         raise Exception('Invalid environment.')
 

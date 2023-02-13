@@ -14,7 +14,7 @@ class AGO(BaseAgent):
         self.generator = Generator(self.state_dim, self.ac_dim, self.goal_dim, self.noise_dim).to(device=self.device)
         self.discriminator = Discriminator(self.state_dim, self.ac_dim, self.goal_dim).to(device=self.device)
         self.generator_opt = torch.optim.Adam(self.generator.parameters(), lr=1e-4, betas=(0.5, 0.999))
-        self.discriminator_opt = torch.optim.Adam(self.discriminator.parameters(), lr=1e-4, betas=(0.5, 0.999))
+        self.discriminator_opt = torch.optim.Adam(self.discriminator.parameters(), lr=1e-5, betas=(0.5, 0.999))
 
         self.v_net = v_network(self.state_dim, self.goal_dim).to(device=self.device)
         self.v_target_net = v_network(self.state_dim, self.goal_dim).to(device=self.device)
@@ -27,7 +27,7 @@ class AGO(BaseAgent):
         self.v_training_steps = 0
 
     def train_models(self):
-        wgan_info = self.train_wgan(batch_size=512)
+        wgan_info = self.train_wgan(batch_size=128)
         '''
         value_function_info = self.train_value_function(batch_size=512)
         if self.v_training_steps % 2 == 0:

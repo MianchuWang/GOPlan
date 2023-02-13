@@ -72,7 +72,7 @@ class Policy(nn.Module):
         self.log_std = nn.Parameter(torch.zeros(ac_dim), requires_grad=True)
 
     def forward(self, s, g):
-        input = torch.cat((s, g), dim=1)
+        input = torch.cat((s, g), dim=-1)
         loc = torch.tanh(self.model(input))
         scale = torch.exp(self.log_std)
         normal_dist = Normal(loc, scale)
