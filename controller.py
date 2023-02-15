@@ -16,21 +16,22 @@ class Controller:
     def train(self):
         for i in tqdm(range(self.pretrain_steps)):
             training_info = self.agent.train_models()
+            if i % 10000 == 0:
+                eval_info = self.eval()
             if self.enable_wandb:
-                wandb.log(training_info)
+                wandb.log({**training_info, **eval_info})
+                eval_info = {}
 
     def eval(self):
         returns = []
-        actions = []
         for i in tqdm(range(self.eval_episodes)):
             self.agent.reset()
             obs = self.env.reset(seed=np.random.randint(1e10))[0]
             for step in range(self.env_info['max_steps']):
                 action = self.agent.get_action(obs['observation'], obs['desired_goal'])
                 obs, reward, _, _, info = self.env.step(action)
-                actions.append(action.item())
                 returns.append(reward)
 
         mean_return = np.array(returns).sum() / self.eval_episodes
         print('The return is', mean_return)
-        return actions
+        return {'return': mean_return}

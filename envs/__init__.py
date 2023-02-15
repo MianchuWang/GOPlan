@@ -27,7 +27,7 @@ def return_environment(env_name, render_mode):
                 'ac_dim': env.action_space.shape[0],
                 'max_steps': env._max_episode_steps,
                 'get_goal_from_state': get_goal_from_state(env_name),
-                'compute_reward': env.compute_reward}
+                'compute_reward': lambda x, y, z : env.compute_reward(x, y, None) + 1}
     elif env_name in bandit_env:
         from envs.bandit import Bandit
         env = Bandit()

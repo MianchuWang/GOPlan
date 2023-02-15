@@ -12,11 +12,13 @@ class Generator(nn.Module):
         self.goal_dim = goal_dim
         self.noise_dim = noise_dim
         self.input_dim = self.state_dim + self.goal_dim + noise_dim
-        self.model = nn.Sequential(nn.Linear(self.input_dim, 256),
+        self.model = nn.Sequential(nn.Linear(self.input_dim, 512),
+                                   nn.BatchNorm1d(512),
                                    nn.ReLU(),
-                                   nn.Linear(256, 256),
+                                   nn.Linear(512, 512),
+                                   nn.BatchNorm1d(512),
                                    nn.ReLU(),
-                                   nn.Linear(256, self.ac_dim))
+                                   nn.Linear(512, self.ac_dim))
 
     def forward(self, state, goal, noise):
         input = torch.cat([state, goal, noise], dim=-1)
@@ -31,11 +33,11 @@ class Discriminator(nn.Module):
         self.ac_dim = ac_dim
         self.goal_dim = goal_dim
         self.input_dim = self.state_dim + self.ac_dim + self.goal_dim
-        self.model = nn.Sequential(spectral_norm(nn.Linear(self.input_dim, 256)),
-                                   nn.ReLU(),
-                                   spectral_norm(nn.Linear(256, 256)),
-                                   nn.ReLU(),
-                                   spectral_norm(nn.Linear(256, 1)))
+        self.model = nn.Sequential(spectral_norm(nn.Linear(self.input_dim, 512)),
+                                   nn.LeakyReLU(),
+                                   spectral_norm(nn.Linear(512, 512)),
+                                   nn.LeakyReLU(),
+                                   spectral_norm(nn.Linear(512, 1)))
     def forward(self, states, actions, goals):
         input = torch.cat([states, actions, goals], dim=-1)
         return self.model(input)

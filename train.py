@@ -3,6 +3,8 @@ import random
 import torch
 import numpy as np
 import wandb
+import os
+import time
 import seaborn
 import matplotlib.pyplot as plt
 
@@ -15,18 +17,18 @@ from agents import return_agent
 from controller import Controller
 
 parser = argparse.ArgumentParser()
-parser.add_argument('--env_name', type=str, default='bandit')
-parser.add_argument('--dataset', type=str, default='datasets/bandit/bandit')
-parser.add_argument('--agent', type=str, default='gcsl')
+parser.add_argument('--env_name', type=str, default='FetchReach-v3')
+parser.add_argument('--dataset', type=str, default='datasets/gym/expert/FetchReach')
+parser.add_argument('--agent', type=str, default='ago')
 parser.add_argument('--buffer_capacity', type=int, default=400_0000)
 parser.add_argument('--discount', type=float, default=0.98)
 parser.add_argument('--normalise', type=int, choices=[0, 1], default=1)
 parser.add_argument('--render_mode', type=str, default=None)
-parser.add_argument('--seed', type=int, default=200)
+parser.add_argument('--seed', type=int, default=100)
 
-parser.add_argument('--enable_wandb', type=int, choices=[0, 1], default=0)
-parser.add_argument('--pretrain_steps', type=int, default=10000)
-parser.add_argument('--eval_episodes', type=int, default=100000)
+parser.add_argument('--enable_wandb', type=int, choices=[0, 1], default=1)
+parser.add_argument('--pretrain_steps', type=int, default=200000)
+parser.add_argument('--eval_episodes', type=int, default=100)
 args = parser.parse_args()
 print(args)
 
@@ -56,10 +58,11 @@ controller = Controller(pretrain_steps=args.pretrain_steps, eval_episodes=args.e
 
 controller.train()
 actions = controller.eval()
-
-#seaborn.histplot(buffer.actions[:buffer.curr_ptr].squeeze(), bins=20, binrange=(-1.4, 1.4),
-#                 stat='density', color='white')
+'''
+seaborn.histplot(buffer.actions[:buffer.curr_ptr].squeeze(), bins=20, binrange=(-1.4, 1.4),
+                 stat='density', color='white')
 seaborn.lineplot(x=np.arange(-2, 2, 0.01), y=env.compute_reward(np.arange(-2, 2, 0.01)),
                  linewidth=2, color='black')
 seaborn.histplot(actions, bins=20, binrange=(-1.4, 1.4), stat='density', edgecolor='red', color='white')
 plt.show()
+'''
