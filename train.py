@@ -17,8 +17,8 @@ from agents import return_agent
 from controller import Controller
 
 parser = argparse.ArgumentParser()
-parser.add_argument('--env_name', type=str, default='FetchReach-v3')
-parser.add_argument('--dataset', type=str, default='datasets/gym/expert/FetchReach')
+parser.add_argument('--env_name', type=str, default='FetchPush-v2')
+parser.add_argument('--dataset', type=str, default='datasets/gym/expert/FetchPush')
 parser.add_argument('--agent', type=str, default='ago')
 parser.add_argument('--buffer_capacity', type=int, default=400_0000)
 parser.add_argument('--discount', type=float, default=0.98)
@@ -27,7 +27,7 @@ parser.add_argument('--render_mode', type=str, default=None)
 parser.add_argument('--seed', type=int, default=100)
 
 parser.add_argument('--enable_wandb', type=int, choices=[0, 1], default=1)
-parser.add_argument('--pretrain_steps', type=int, default=200000)
+parser.add_argument('--pretrain_steps', type=int, default=500000)
 parser.add_argument('--eval_episodes', type=int, default=100)
 args = parser.parse_args()
 print(args)

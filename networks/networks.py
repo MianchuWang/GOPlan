@@ -84,11 +84,11 @@ class v_network(nn.Module):
     def __init__(self, state_dim, goal_dim):
         super(v_network, self).__init__()
         self.state_dim = state_dim
-        self.model = nn.Sequential(nn.Linear(state_dim + goal_dim, 256),
+        self.model = nn.Sequential(nn.Linear(state_dim + goal_dim, 512),
                                    nn.ReLU(),
-                                   nn.Linear(256, 256),
+                                   nn.Linear(512, 512),
                                    nn.ReLU(),
-                                   nn.Linear(256, 1))
+                                   nn.Linear(512, 1))
     def forward(self, state, goal):
         input = torch.cat([state, goal], dim=1)
         output = self.model(input)

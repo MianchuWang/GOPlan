@@ -1,6 +1,7 @@
 from agents.gcsl import GCSL
 from agents.bc import BC
 from agents.ago import AGO
+from agents.geaw import GEAW
 
 
 def return_agent(**agent_params):
@@ -10,5 +11,7 @@ def return_agent(**agent_params):
         return BC(**agent_params)
     elif agent_params['agent'] == 'ago':
         return AGO(**agent_params)
+    elif agent_params['agent'] == 'geaw':
+        return GEAW(**agent_params)
     else:
         raise Exception('Invalid agent!')
