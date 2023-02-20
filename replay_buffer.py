@@ -62,36 +62,3 @@ class ReplayBuffer:
         ret_goals = self.get_goal_from_state(self.next_obs[entry, goal_index]) * replace[..., np.newaxis] + \
                     self.goals[entry, 0] * (1 - replace[..., np.newaxis])
         return ret_obs, ret_actions, ret_next_obs, ret_goals
-
-    def sample_for_gan(self, batch_size, noise=[0.0001, 0.0001, 0.0001]):
-
-        ret_obs = np.zeros((batch_size, self.state_dim))
-        ret_next_obs = np.zeros((batch_size, self.state_dim))
-        ret_actions = np.zeros((batch_size, self.ac_dim))
-        ret_goals = np.zeros((batch_size, self.goal_dim))
-
-        _, high = self.get_bounds()
-        b = 0
-        while b < batch_size:
-            entry = np.random.randint(0, high)
-            index = np.random.randint(0, self.traj_len[entry])
-            goal_index = np.random.randint(index, self.traj_len[entry])
-            achieved_goal = self.get_goal_from_state(self.obs[entry, index])
-            desired_goal = self.get_goal_from_state(self.obs[entry, goal_index])
-            distance = np.linalg.norm(achieved_goal - desired_goal)
-            if distance < 0.01:
-                continue
-            else:
-                ret_obs[b] = self.obs[entry, index]
-                ret_next_obs[b] = self.next_obs[entry, index]
-                ret_actions[b] = self.actions[entry, index]
-                ret_goals[b] = desired_goal
-                b += 1
-        if noise[0] > 0:
-            ret_obs += np.random.randn(*ret_obs.shape) * noise[0]
-            ret_next_obs += np.random.randn(*ret_next_obs.shape) * noise[0]
-        if noise[1] > 0:
-            ret_actions = np.clip(ret_actions + np.random.randn(*ret_actions.shape) * noise[1], -1.0, 1.0)
-        if noise[2] > 0:
-            ret_goals += np.random.randn(*ret_goals.shape) * noise[2]
-        return ret_obs, ret_actions, ret_next_obs, ret_goals

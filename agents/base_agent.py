@@ -47,25 +47,37 @@ class BaseAgent(object):
         self.diff_scaler.fit(diff + diff_noise * np.random.randn(*diff.shape))
 
     def preprocess(self, states=None, actions=None, next_states=None, goals=None):
-
         if states is not None:
             if self.normalise:
                 states = self.state_scaler.transform(states)
             states = torch.tensor(states, dtype=torch.float32, device=self.device)
-
         if actions is not None:
             actions = torch.tensor(actions, dtype=torch.float32, device=self.device)
-
         if next_states is not None:
             if self.normalise:
                 next_states = self.state_scaler.transform(next_states)
             next_states = torch.tensor(next_states, dtype=torch.float32, device=self.device)
-
         if goals is not None:
             if self.normalise:
                 goals = self.goal_scaler.transform(goals)
             goals = torch.tensor(goals, dtype=torch.float32, device=self.device)
+        return states, actions, next_states, goals
 
+    def postprocess(self, states=None, actions=None, next_states=None, goals=None):
+        if states is not None:
+            if self.normalise:
+                states = self.state_scaler.inverse_transform(states)
+            states = states.detach().cpu().numpy()
+        if actions is not None:
+            actions = actions.detach().cpu().numpy()
+        if next_states is not None:
+            if self.normalise:
+                next_states = self.state_scaler.inverse_transform(next_states)
+            next_states = next_states.detach().cpu().numpy()
+        if goals is not None:
+            if self.normalise:
+                goals = self.goal_scaler.inverse_transform(goals)
+            goals = goals.detach().cpu().numpy()
         return states, actions, next_states, goals
 
     def load(self):
