@@ -14,24 +14,29 @@ class Controller:
         self.enable_wandb = enable_wandb
 
     def train(self):
-        for i in tqdm(range(self.pretrain_steps)):
+        for i in tqdm(range(0, self.pretrain_steps)):
+            policy_eval_info = {}
+            plan_eval_info = {}
             training_info = self.agent.train_models()
             if i % 10000 == 0:
-                eval_info = self.eval()
+                policy_eval_info = self.eval('policy')
+                plan_eval_info = self.eval('plan')
             if self.enable_wandb:
-                wandb.log({**training_info, **eval_info})
-                eval_info = {}
+                wandb.log({**training_info, **plan_eval_info, **policy_eval_info})
 
-    def eval(self):
+    def eval(self, mode='plan'):
         returns = []
         for i in tqdm(range(self.eval_episodes)):
             self.agent.reset()
             obs = self.env.reset(seed=np.random.randint(1e10))[0]
             for step in range(self.env_info['max_steps']):
-                action = self.agent.get_action(obs['observation'], obs['desired_goal'])
+                if mode == 'plan':
+                    action = self.agent.plan(obs['observation'], obs['desired_goal'])
+                else:
+                    action = self.agent.get_action(obs['observation'], obs['desired_goal'])
                 obs, reward, _, _, info = self.env.step(action)
                 returns.append(reward)
 
         mean_return = np.array(returns).sum() / self.eval_episodes
-        print('The return is', mean_return)
-        return {'return': mean_return}
+        print('return (' + mode + ') is ' + str(mean_return))
+        return {'return (' + mode + ')': mean_return}

@@ -65,19 +65,19 @@ class BaseAgent(object):
 
     def postprocess(self, states=None, actions=None, next_states=None, goals=None):
         if states is not None:
+            states = states.detach().cpu().numpy()
             if self.normalise:
                 states = self.state_scaler.inverse_transform(states)
-            states = states.detach().cpu().numpy()
         if actions is not None:
             actions = actions.detach().cpu().numpy()
         if next_states is not None:
+            next_states = next_states.detach().cpu().numpy()
             if self.normalise:
                 next_states = self.state_scaler.inverse_transform(next_states)
-            next_states = next_states.detach().cpu().numpy()
         if goals is not None:
+            goals = goals.detach().cpu().numpy()
             if self.normalise:
                 goals = self.goal_scaler.inverse_transform(goals)
-            goals = goals.detach().cpu().numpy()
         return states, actions, next_states, goals
 
     def load(self):

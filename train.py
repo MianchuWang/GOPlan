@@ -58,11 +58,3 @@ controller = Controller(pretrain_steps=args.pretrain_steps, eval_episodes=args.e
 
 controller.train()
 actions = controller.eval()
-'''
-seaborn.histplot(buffer.actions[:buffer.curr_ptr].squeeze(), bins=20, binrange=(-1.4, 1.4),
-                 stat='density', color='white')
-seaborn.lineplot(x=np.arange(-2, 2, 0.01), y=env.compute_reward(np.arange(-2, 2, 0.01)),
-                 linewidth=2, color='black')
-seaborn.histplot(actions, bins=20, binrange=(-1.4, 1.4), stat='density', edgecolor='red', color='white')
-plt.show()
-'''
