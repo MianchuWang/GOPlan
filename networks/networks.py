@@ -33,14 +33,14 @@ class Discriminator(nn.Module):
         self.ac_dim = ac_dim
         self.goal_dim = goal_dim
         self.input_dim = self.state_dim + self.ac_dim + self.goal_dim
-        self.model = nn.Sequential(spectral_norm(nn.Linear(self.input_dim, 512)),
+        self.model = nn.Sequential(nn.Linear(self.input_dim, 512),
                                    nn.LeakyReLU(),
-                                   spectral_norm(nn.Linear(512, 512)),
+                                   nn.Linear(512, 512),
                                    nn.LeakyReLU(),
-                                   spectral_norm(nn.Linear(512, 1)))
+                                   nn.Linear(512, 1))
     def forward(self, states, actions, goals):
         input = torch.cat([states, actions, goals], dim=-1)
-        return self.model(input)
+        return torch.sigmoid(self.model(input))
 
 
 class Dynamics(nn.Module):
