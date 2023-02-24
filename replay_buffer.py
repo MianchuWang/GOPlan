@@ -2,7 +2,7 @@ import numpy as np
 import joblib
 
 class ReplayBuffer:
-    def __init__(self, buffer_size, state_dim, ac_dim, goal_dim, max_steps, get_goal_from_state):
+    def __init__(self, buffer_size, state_dim, ac_dim, goal_dim, max_steps, get_goal_from_state, compute_reward):
 
         self.entries = int(buffer_size / max_steps)
         self.obs = np.zeros((self.entries, max_steps, state_dim), dtype=np.float64)
@@ -17,6 +17,7 @@ class ReplayBuffer:
         self.buffer_size = buffer_size
         self.max_steps = max_steps
         self.get_goal_from_state = get_goal_from_state
+        self.compute_reward = compute_reward
 
         self.is_full = False
         self.curr_ptr = 0
@@ -62,3 +63,16 @@ class ReplayBuffer:
         ret_goals = self.get_goal_from_state(self.next_obs[entry, goal_index]) * replace[..., np.newaxis] + \
                     self.goals[entry, 0] * (1 - replace[..., np.newaxis])
         return ret_obs, ret_actions, ret_next_obs, ret_goals
+
+    def sample_intra_reanalysis(self):
+        while True:
+            _, high = self.get_bounds()
+            entry = np.random.randint(0, high)
+            start = np.random.randint(0, self.traj_len[entry]-1)
+            end = np.random.randint(start+1, self.traj_len[entry])
+
+            if self.compute_reward(self.get_goal_from_state(self.obs[entry, start]),
+                                   self.get_goal_from_state(self.next_obs[entry, end]), None) == 0:
+                break
+        return self.obs[entry][start:end], self.actions[entry][start:end], self.next_obs[entry][start:end], \
+               self.get_goal_from_state(self.next_obs[entry, end, np.newaxis]).repeat(end-start, axis=0)

@@ -2,10 +2,12 @@
 import torch
 import joblib
 import numpy as np
+from tqdm import tqdm
 
 from agents.base_agent import BaseAgent
 from networks.networks import Generator, Discriminator, v_network
 from dynamics.dynamics import DynamicsModel
+from replay_buffer import ReplayBuffer
 
 class AGO(BaseAgent):
     def __init__(self, **agent_params):
@@ -28,8 +30,16 @@ class AGO(BaseAgent):
 
         self.her_prob = 1.0
         self.v_training_steps = 0
+        
+        self.reanalysis_buffer = ReplayBuffer(buffer_size=2000000, state_dim=self.state_dim,
+                                              ac_dim=self.ac_dim, goal_dim=self.goal_dim,
+                                              max_steps=self.max_steps,
+                                              get_goal_from_state=self.get_goal_from_state,
+                                              compute_reward=self.compute_reward)
 
-    def train_models(self):
+        self.load()
+
+    def pretrain_models(self):
         gan_info = self.train_gan(batch_size=128)
         dynamics_info = self.train_dynamics(batch_size=512)
         value_function_info = self.train_value_function(batch_size=512)
@@ -37,15 +47,44 @@ class AGO(BaseAgent):
             self.update_target_nets(self.v_net, self.v_target_net)
         return {**gan_info, **value_function_info, **dynamics_info}
 
-    def train_gan(self, batch_size):
+    def produce_intra_traj(self, num_traj):
+        for _ in tqdm(range(num_traj)):
+            states, actions, next_states, goals = self.replay_buffer.sample_intra_reanalysis()
+            states_prep, actions_prep, _, goals_prep  = self.preprocess(states=states, actions=actions, goals=goals)
+            length = states.shape[0]
+            state = states[0]
+            i = 0
+            while i < length - 1:
+                action = self.plan(state.squeeze(), goals[i])
+                _, actions_prep[i], _, _ = self.preprocess(actions=action[np.newaxis])
+                next_state = self.dynamics.predict(states_prep[i].unsqueeze(0), actions_prep[i].unsqueeze(0), mean=True)
+                states_prep[i+1] = next_state
+
+                state, _, _, _ = self.postprocess(states=next_state)
+                if i > 2 and self.compute_reward(self.get_goal_from_state(state), goals[i][np.newaxis], None):
+                    if self.dynamics.uncertainty(states_prep[:i + 2], actions_prep[:i + 1]) < 0.01:
+                        states_post, actions_post, _, _ = self.postprocess(states=states_prep[:i+2], actions=actions_prep[:i+1])
+                        self.reanalysis_buffer.push({'observations': states_post[:-1], 'next_observations': states_post[1:],
+                                                     'actions': actions_post, 'desired_goals': goals[:i+1]})
+                    else:
+                        break
+                i = i + 1
+            self.reanalysis_buffer.push({'observations': states, 'next_observations': next_states,
+                                         'actions': actions, 'desired_goals': goals})
+
+    def train_gan(self, batch_size, reanalysis=False):
         # Real actions -> higher score
         # Fake actions -> lower score
-        self.discriminator.train()
-        self.generator.train()
-        states, actions, next_states, goals = self.replay_buffer.sample(batch_size, her_prob=self.her_prob)
+        if reanalysis:
+            states, actions, next_states, goals = self.reanalysis_buffer.sample(batch_size, her_prob=self.her_prob)
+        else:
+            states, actions, next_states, goals = self.replay_buffer.sample(batch_size, her_prob=self.her_prob)
         states_prep, actions_prep, next_states_prep, goals_prep = \
             self.preprocess(states=states, actions=actions, next_states=next_states, goals=goals)
-        
+
+        self.discriminator.train()
+        self.generator.train()
+
         achieved_goals = self.get_goal_from_state(next_states)
         rewards = self.compute_reward(achieved_goals, goals, None)[..., np.newaxis]
         rewards_tensor = torch.tensor(rewards, dtype=torch.float32, device=self.device)
@@ -66,7 +105,7 @@ class AGO(BaseAgent):
 
         noise = torch.randn(batch_size, self.noise_dim, device=self.device)
         fake_actions = self.generator(states_prep, goals_prep, noise)
-        gen_loss = torch.log(1 - self.discriminator(states_prep, fake_actions, goals_prep))
+        gen_loss = torch.log(1 - self.discriminator(states_prep, fake_actions, goals_prep)).mean()
         self.generator_opt.zero_grad()
         gen_loss.backward()
         self.generator_opt.step()
@@ -126,7 +165,7 @@ class AGO(BaseAgent):
                                                             goals=goal[np.newaxis].repeat(num_acs, axis=0))
             noise = torch.randn(num_acs, self.noise_dim, device=self.device)
             gen_actions = self.generator(states_prep, goals_prep, noise)
-            pred_next_states = self.dynamics.predict(states_prep, gen_actions)
+            pred_next_states = self.dynamics.predict(states_prep, gen_actions, mean=True)
 
             rep_goals = goals_prep.repeat(num_copies, 1)
             all_states = torch.zeros(num_acs * num_copies, max_steps + 1, self.state_dim, device=self.device)
@@ -135,7 +174,7 @@ class AGO(BaseAgent):
             for h in range(0, max_steps):
                 noise = torch.randn(num_acs * num_copies, self.noise_dim, device=self.device)
                 actions = self.generator(all_states[:, h], rep_goals, noise)
-                all_states[:, h + 1] = self.dynamics.predict(all_states[:, h], actions)
+                all_states[:, h + 1] = self.dynamics.predict(all_states[:, h], actions, mean=True)
             unnormalised_states, _, _, _ = self.postprocess(states=all_states.reshape(-1, self.state_dim))
             achieved_goals = self.get_goal_from_state(unnormalised_states)
 
@@ -154,8 +193,16 @@ class AGO(BaseAgent):
             kappa = 2
             gen_actions = gen_actions.cpu().numpy()
             action = (gen_actions * np.exp(kappa * rewards[..., np.newaxis])).sum(axis=0) / \
-                     np.exp(kappa * rewards[..., np.newaxis]).sum()
+                      np.exp(kappa * rewards[..., np.newaxis]).sum()
             return action
 
+    def load(self):
+        models = joblib.load('models')
+        self.dynamics, self.generator, self.discriminator, self.v_net, self.v_target_net, \
+            self.generator_opt, self.discriminator_opt, self.v_net_opt = models
+    def save(self, path):
+        models = (self.dynamics, self.generator, self.discriminator, self.v_net, self.v_target_net,
+                  self.generator_opt, self.discriminator_opt, self.v_net_opt)
+        joblib.dump(models, path)
 
 

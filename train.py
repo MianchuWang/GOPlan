@@ -26,9 +26,9 @@ parser.add_argument('--normalise', type=int, choices=[0, 1], default=1)
 parser.add_argument('--render_mode', type=str, default=None)
 parser.add_argument('--seed', type=int, default=100)
 
-parser.add_argument('--enable_wandb', type=int, choices=[0, 1], default=1)
+parser.add_argument('--enable_wandb', type=int, choices=[0, 1], default=0)
 parser.add_argument('--pretrain_steps', type=int, default=500000)
-parser.add_argument('--eval_episodes', type=int, default=100)
+parser.add_argument('--eval_episodes', type=int, default=200)
 args = parser.parse_args()
 print(args)
 
@@ -43,7 +43,8 @@ torch.cuda.manual_seed(args.seed)
 
 buffer = ReplayBuffer(buffer_size=args.buffer_capacity, state_dim=env_info['state_dim'],
                       ac_dim=env_info['ac_dim'], goal_dim=env_info['goal_dim'],
-                      max_steps=env_info['max_steps'], get_goal_from_state=env_info['get_goal_from_state'])
+                      max_steps=env_info['max_steps'], get_goal_from_state=env_info['get_goal_from_state'],
+                      compute_reward=env_info['compute_reward'])
 buffer.load_dataset(args.dataset)
 
 agent = return_agent(agent=args.agent, replay_buffer=buffer, state_dim=env_info['state_dim'],

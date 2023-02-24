@@ -24,12 +24,27 @@ class DynamicsModel(nn.Module):
             self.opts[i].step()
         return {'dynamics_loss': loss.item()}
 
-    def predict(self, states, actions):
+    def uncertainty(self, states, actions):
+        length = states.shape[0] - 1
+        pred_states = torch.zeros(self.num_models, length, self.state_dim, device=self.device)
+        for i in range(length):
+            for k in range(self.num_models):
+                pred_states[k, i] = self.models[k](states[i].unsqueeze(0), actions[i].unsqueeze(0))
+        variances = pred_states.var(0)
+        return torch.max(variances.mean(dim=1)).item()
+
+
+
+    def predict(self, states, actions, mean=False):
         pred_next_states = torch.zeros(states.shape).to(device=self.device)
-        index = torch.randint(self.num_models, (states.shape[0],)).to(device=self.device)
-        for i in range(self.num_models):
-            indices = (index==i).to(torch.int32).unsqueeze(dim=-1)
-            pred_next_states += self.models[i](states, actions) * indices
+        if mean:
+            for i in range(self.num_models):
+                pred_next_states += self.models[i](states, actions) / self.num_models
+        else:
+            index = torch.randint(self.num_models, (states.shape[0],)).to(device=self.device)
+            for i in range(self.num_models):
+                indices = (index==i).to(torch.int32).unsqueeze(dim=-1)
+                pred_next_states += self.models[i](states, actions) * indices
         return pred_next_states
 
 
