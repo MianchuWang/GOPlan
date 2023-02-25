@@ -26,7 +26,7 @@ parser.add_argument('--normalise', type=int, choices=[0, 1], default=1)
 parser.add_argument('--render_mode', type=str, default=None)
 parser.add_argument('--seed', type=int, default=100)
 
-parser.add_argument('--enable_wandb', type=int, choices=[0, 1], default=0)
+parser.add_argument('--enable_wandb', type=int, choices=[0, 1], default=1)
 parser.add_argument('--pretrain_steps', type=int, default=500000)
 parser.add_argument('--eval_episodes', type=int, default=200)
 args = parser.parse_args()

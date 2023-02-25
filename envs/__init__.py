@@ -22,7 +22,8 @@ def return_environment(env_name, render_mode):
     if env_name in gym_robotics:
         env = gym.make(env_name, render_mode=render_mode)
         return GymWrapper(env), \
-               {'state_dim': env.observation_space['observation'].shape[0],
+               {'env_name': env_name,
+                'state_dim': env.observation_space['observation'].shape[0],
                 'goal_dim': env.observation_space['desired_goal'].shape[0],
                 'ac_dim': env.action_space.shape[0],
                 'max_steps': env._max_episode_steps,

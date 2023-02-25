@@ -14,6 +14,7 @@ class AGO(BaseAgent):
         super().__init__(**agent_params)
 
         self.noise_dim = 64
+        self.her_prob = 1.0
 
         self.dynamics = DynamicsModel(3, self.state_dim, self.ac_dim, self.device)
 
@@ -21,56 +22,104 @@ class AGO(BaseAgent):
         self.discriminator = Discriminator(self.state_dim, self.ac_dim, self.goal_dim).to(device=self.device)
         self.generator_opt = torch.optim.Adam(self.generator.parameters(), lr=1e-4, betas=(0.5, 0.999))
         self.discriminator_opt = torch.optim.Adam(self.discriminator.parameters(), lr=1e-4, betas=(0.5, 0.999))
+        self.generator.eval()
+        self.discriminator.eval()
 
         self.v_net = v_network(self.state_dim, self.goal_dim).to(device=self.device)
         self.v_target_net = v_network(self.state_dim, self.goal_dim).to(device=self.device)
         self.v_target_net.load_state_dict(self.v_net.state_dict())
         self.v_net_opt = torch.optim.Adam(self.v_net.parameters(), lr=1e-3)
         self.v_training_steps = 0
-
-        self.her_prob = 1.0
-        self.v_training_steps = 0
         
-        self.reanalysis_buffer = ReplayBuffer(buffer_size=2000000, state_dim=self.state_dim,
+        self.reanalysis_buffer = ReplayBuffer(buffer_size=1000000, state_dim=self.state_dim,
                                               ac_dim=self.ac_dim, goal_dim=self.goal_dim,
                                               max_steps=self.max_steps,
                                               get_goal_from_state=self.get_goal_from_state,
                                               compute_reward=self.compute_reward)
 
-        self.load()
-
     def pretrain_models(self):
-        gan_info = self.train_gan(batch_size=128)
         dynamics_info = self.train_dynamics(batch_size=512)
-        value_function_info = self.train_value_function(batch_size=512)
+        gan_info = self.train_gan(batch_size=128, reanalysis=False)
+        value_function_info = self.train_value_function(batch_size=512, reanalysis=False)
         if self.v_training_steps % 2 == 0:
             self.update_target_nets(self.v_net, self.v_target_net)
         return {**gan_info, **value_function_info, **dynamics_info}
 
+    def finetune_models(self):
+        gan_info = self.train_gan(batch_size=128, reanalysis=True)
+        value_function_info = self.train_value_function(batch_size=512, reanalysis=True)
+        if self.v_training_steps % 2 == 0:
+            self.update_target_nets(self.v_net, self.v_target_net)
+        return {**gan_info, **value_function_info}
+
+    def produce_inter_traj(self, num_traj):
+        new_traj = 0
+        uncertain_traj = 0
+        failed_traj = 0
+        for _ in tqdm(range(num_traj)):
+            state, goal = self.replay_buffer.sample_inter_reanalysis()
+            pred_states = torch.zeros(self.max_steps, self.state_dim, device=self.device)
+            pred_actions = torch.zeros(self.max_steps, self.ac_dim, device=self.device)
+            pred_states[0], _, _, _ = self.preprocess(states=state[np.newaxis])
+            for i in range(self.max_steps - 1):
+                ac = self.plan(state.squeeze(), goal)
+                _, pred_actions[i], _, _ = self.preprocess(actions=ac[np.newaxis])
+                ns = self.dynamics.predict(pred_states[i].unsqueeze(0), pred_actions[i].unsqueeze(0), mean=False)
+                pred_states[i + 1] = ns
+                state, _, _, _ = self.postprocess(states=ns)
+
+                if self.dynamics.uncertainty(pred_states[i:i+2], pred_actions[i:i+1]) > 0.02:
+                    uncertain_traj += 1
+                    break
+                if i > 1 and self.compute_reward(self.get_goal_from_state(state), goal[np.newaxis], None):
+                    states_post, actions_post, _, _ = self.postprocess(states=pred_states[:i + 2],
+                                                                       actions=pred_actions[:i + 1])
+                    self.reanalysis_buffer.push(
+                        {'observations': states_post[:-1], 'next_observations': states_post[1:],
+                         'actions': actions_post, 'desired_goals': goal[np.newaxis].repeat(i+1, axis=0)})
+                    new_traj += 1
+                    break
+                if i == self.max_steps - 2:
+                    failed_traj += 1
+        return {'inter new traj': new_traj / num_traj,
+                'inter uncertain traj': uncertain_traj / num_traj,
+                'inter failed traj': failed_traj / num_traj}
+
     def produce_intra_traj(self, num_traj):
+        new_traj = 0
+        uncertain_traj = 0
+        failed_traj = 0
         for _ in tqdm(range(num_traj)):
             states, actions, next_states, goals = self.replay_buffer.sample_intra_reanalysis()
-            states_prep, actions_prep, _, goals_prep  = self.preprocess(states=states, actions=actions, goals=goals)
-            length = states.shape[0]
-            state = states[0]
-            i = 0
-            while i < length - 1:
-                action = self.plan(state.squeeze(), goals[i])
-                _, actions_prep[i], _, _ = self.preprocess(actions=action[np.newaxis])
-                next_state = self.dynamics.predict(states_prep[i].unsqueeze(0), actions_prep[i].unsqueeze(0), mean=True)
-                states_prep[i+1] = next_state
+            pred_states = torch.zeros(states.shape[0], self.state_dim, device=self.device)
+            pred_actions = torch.zeros(states.shape[0], self.ac_dim, device=self.device)
+            pred_states[0], _, _, _ = self.preprocess(states=states[0][np.newaxis])
+            s = states[0]
+            for i in range(states.shape[0] - 1):
+                ac = self.plan(s.squeeze(), goals[i])
+                _, pred_actions[i], _, _ = self.preprocess(actions=ac[np.newaxis])
+                ns = self.dynamics.predict(pred_states[i].unsqueeze(0), pred_actions[i].unsqueeze(0), mean=False)
+                pred_states[i+1] = ns
 
-                state, _, _, _ = self.postprocess(states=next_state)
-                if i > 2 and self.compute_reward(self.get_goal_from_state(state), goals[i][np.newaxis], None):
-                    if self.dynamics.uncertainty(states_prep[:i + 2], actions_prep[:i + 1]) < 0.01:
-                        states_post, actions_post, _, _ = self.postprocess(states=states_prep[:i+2], actions=actions_prep[:i+1])
-                        self.reanalysis_buffer.push({'observations': states_post[:-1], 'next_observations': states_post[1:],
-                                                     'actions': actions_post, 'desired_goals': goals[:i+1]})
-                    else:
-                        break
-                i = i + 1
-            self.reanalysis_buffer.push({'observations': states, 'next_observations': next_states,
-                                         'actions': actions, 'desired_goals': goals})
+                s, _, _, _ = self.postprocess(states=ns)
+                if self.dynamics.uncertainty(pred_states[i:i+2], pred_actions[i:i+1]) > 0.02:
+                    self.reanalysis_buffer.push({'observations': states, 'next_observations': next_states,
+                                                 'actions': actions, 'desired_goals': goals})
+                    uncertain_traj += 1
+                    break
+                if i > 1 and self.compute_reward(self.get_goal_from_state(s), goals[i][np.newaxis], None):
+                    states_post, actions_post, _, _ = self.postprocess(states=pred_states[:i+2], actions=pred_actions[:i+1])
+                    self.reanalysis_buffer.push({'observations': states_post[:-1], 'next_observations': states_post[1:],
+                                                 'actions': actions_post, 'desired_goals': goals[:i+1]})
+                    new_traj += 1
+                    break
+                if i == states.shape[0] - 2:
+                    self.reanalysis_buffer.push({'observations': states, 'next_observations': next_states,
+                                                 'actions': actions, 'desired_goals': goals})
+                    failed_traj += 1
+        return {'intra new traj': new_traj / num_traj,
+                'intra uncertain traj': uncertain_traj / num_traj,
+                'intra failed traj': failed_traj / num_traj}
 
     def train_gan(self, batch_size, reanalysis=False):
         # Real actions -> higher score
@@ -118,8 +167,11 @@ class AGO(BaseAgent):
                 'generator_loss': gen_loss.item(),
                 'discriminator_loss': dis_loss.item()}
 
-    def train_value_function(self, batch_size):
-        states, actions, next_states, goals = self.replay_buffer.sample(batch_size, self.her_prob)
+    def train_value_function(self, batch_size, reanalysis):
+        if reanalysis:
+            states, actions, next_states, goals = self.reanalysis_buffer.sample(batch_size, self.her_prob)
+        else:
+            states, actions, next_states, goals = self.replay_buffer.sample(batch_size, self.her_prob)
         achieved_goals = self.get_goal_from_state(next_states)
         rewards = self.compute_reward(achieved_goals, goals, None)[..., np.newaxis]
         rewards_tensor = torch.tensor(rewards, dtype=torch.float32, device=self.device)
@@ -165,7 +217,7 @@ class AGO(BaseAgent):
                                                             goals=goal[np.newaxis].repeat(num_acs, axis=0))
             noise = torch.randn(num_acs, self.noise_dim, device=self.device)
             gen_actions = self.generator(states_prep, goals_prep, noise)
-            pred_next_states = self.dynamics.predict(states_prep, gen_actions, mean=True)
+            pred_next_states = self.dynamics.predict(states_prep, gen_actions, mean=False)
 
             rep_goals = goals_prep.repeat(num_copies, 1)
             all_states = torch.zeros(num_acs * num_copies, max_steps + 1, self.state_dim, device=self.device)
@@ -174,7 +226,7 @@ class AGO(BaseAgent):
             for h in range(0, max_steps):
                 noise = torch.randn(num_acs * num_copies, self.noise_dim, device=self.device)
                 actions = self.generator(all_states[:, h], rep_goals, noise)
-                all_states[:, h + 1] = self.dynamics.predict(all_states[:, h], actions, mean=True)
+                all_states[:, h + 1] = self.dynamics.predict(all_states[:, h], actions, mean=False)
             unnormalised_states, _, _, _ = self.postprocess(states=all_states.reshape(-1, self.state_dim))
             achieved_goals = self.get_goal_from_state(unnormalised_states)
 
@@ -196,13 +248,22 @@ class AGO(BaseAgent):
                       np.exp(kappa * rewards[..., np.newaxis]).sum()
             return action
 
-    def load(self):
-        models = joblib.load('models')
+    def load(self, path):
+        models = joblib.load(path)
         self.dynamics, self.generator, self.discriminator, self.v_net, self.v_target_net, \
-            self.generator_opt, self.discriminator_opt, self.v_net_opt = models
+            self.generator_opt, self.discriminator_opt, self.v_net_opt, self.reanalysis_buffer = models
+        self.reanalysis_buffer.get_goal_from_state = self.get_goal_from_state
+        self.reanalysis_buffer.compute_reward = self.compute_reward
+        return
+
     def save(self, path):
+        self.reanalysis_buffer.get_goal_from_state = None
+        self.reanalysis_buffer.compute_reward = None
         models = (self.dynamics, self.generator, self.discriminator, self.v_net, self.v_target_net,
-                  self.generator_opt, self.discriminator_opt, self.v_net_opt)
+                  self.generator_opt, self.discriminator_opt, self.v_net_opt, self.reanalysis_buffer)
         joblib.dump(models, path)
 
+        self.reanalysis_buffer.get_goal_from_state = self.get_goal_from_state
+        self.reanalysis_buffer.compute_reward = self.compute_reward
+        return
 

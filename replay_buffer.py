@@ -64,6 +64,20 @@ class ReplayBuffer:
                     self.goals[entry, 0] * (1 - replace[..., np.newaxis])
         return ret_obs, ret_actions, ret_next_obs, ret_goals
 
+    def sample_inter_reanalysis(self):
+        while True:
+            _, high = self.get_bounds()
+            state_traj = np.random.randint(0, high)
+            state_idx = np.random.randint(0, self.traj_len[state_traj])
+
+            goal_traj = np.random.randint(0, high)
+            goal_idx = np.random.randint(0, self.traj_len[goal_traj])
+
+            if self.compute_reward(self.get_goal_from_state(self.obs[state_traj, state_idx]),
+                                   self.goals[goal_traj, goal_idx], None) == 0:
+                break
+        return self.obs[state_traj, state_idx], self.goals[goal_traj, goal_idx]
+
     def sample_intra_reanalysis(self):
         while True:
             _, high = self.get_bounds()
