@@ -31,7 +31,7 @@ class AGO(BaseAgent):
         self.v_net_opt = torch.optim.Adam(self.v_net.parameters(), lr=1e-3)
         self.v_training_steps = 0
         
-        self.reanalysis_buffer = ReplayBuffer(buffer_size=1000000, state_dim=self.state_dim,
+        self.reanalysis_buffer = ReplayBuffer(buffer_size=2000000, state_dim=self.state_dim,
                                               ac_dim=self.ac_dim, goal_dim=self.goal_dim,
                                               max_steps=self.max_steps,
                                               get_goal_from_state=self.get_goal_from_state,
@@ -68,10 +68,10 @@ class AGO(BaseAgent):
                 pred_states[i + 1] = ns
                 state, _, _, _ = self.postprocess(states=ns)
 
-                if self.dynamics.uncertainty(pred_states[i:i+2], pred_actions[i:i+1]) > 0.02:
+                if self.dynamics.uncertainty(pred_states[i:i+2], pred_actions[i:i+1]) > 0.1:
                     uncertain_traj += 1
                     break
-                if i > 1 and self.compute_reward(self.get_goal_from_state(state), goal[np.newaxis], None):
+                if self.compute_reward(self.get_goal_from_state(state), goal[np.newaxis], None):
                     states_post, actions_post, _, _ = self.postprocess(states=pred_states[:i + 2],
                                                                        actions=pred_actions[:i + 1])
                     self.reanalysis_buffer.push(
@@ -81,6 +81,12 @@ class AGO(BaseAgent):
                     break
                 if i == self.max_steps - 2:
                     failed_traj += 1
+                    states_post, actions_post, _, _ = self.postprocess(states=pred_states[:i + 2],
+                                                                       actions=pred_actions[:i + 1])
+                    self.reanalysis_buffer.push(
+                        {'observations': states_post[:-1], 'next_observations': states_post[1:], 'actions': actions_post, 
+                         'desired_goals': self.get_goal_from_state(states_post[-1][np.newaxis]).repeat(i+1, axis=0)})
+
         return {'inter new traj': new_traj / num_traj,
                 'inter uncertain traj': uncertain_traj / num_traj,
                 'inter failed traj': failed_traj / num_traj}
@@ -98,16 +104,16 @@ class AGO(BaseAgent):
             for i in range(states.shape[0] - 1):
                 ac = self.plan(s.squeeze(), goals[i])
                 _, pred_actions[i], _, _ = self.preprocess(actions=ac[np.newaxis])
-                ns = self.dynamics.predict(pred_states[i].unsqueeze(0), pred_actions[i].unsqueeze(0), mean=False)
+                ns = self.dynamics.predict(pred_states[i].unsqueeze(0), pred_actions[i].unsqueeze(0), mean=True)
                 pred_states[i+1] = ns
 
                 s, _, _, _ = self.postprocess(states=ns)
-                if self.dynamics.uncertainty(pred_states[i:i+2], pred_actions[i:i+1]) > 0.02:
+                if self.dynamics.uncertainty(pred_states[i:i+2], pred_actions[i:i+1]) > 0.1:
                     self.reanalysis_buffer.push({'observations': states, 'next_observations': next_states,
                                                  'actions': actions, 'desired_goals': goals})
                     uncertain_traj += 1
                     break
-                if i > 1 and self.compute_reward(self.get_goal_from_state(s), goals[i][np.newaxis], None):
+                if self.compute_reward(self.get_goal_from_state(s), goals[i][np.newaxis], None):
                     states_post, actions_post, _, _ = self.postprocess(states=pred_states[:i+2], actions=pred_actions[:i+1])
                     self.reanalysis_buffer.push({'observations': states_post[:-1], 'next_observations': states_post[1:],
                                                  'actions': actions_post, 'desired_goals': goals[:i+1]})
@@ -125,12 +131,15 @@ class AGO(BaseAgent):
         # Real actions -> higher score
         # Fake actions -> lower score
         if reanalysis:
-            states, actions, next_states, goals = self.reanalysis_buffer.sample(batch_size, her_prob=self.her_prob)
+            states, actions, next_states, goals = self.reanalysis_buffer.sample(batch_size, her_prob=0)
         else:
             states, actions, next_states, goals = self.replay_buffer.sample(batch_size, her_prob=self.her_prob)
+        states += 0.0001 * np.random.randn(*states.shape)
+        next_states += 0.0001 * np.random.randn(*next_states.shape)
+        goals += 0.0001 * np.random.randn(*goals.shape)
         states_prep, actions_prep, next_states_prep, goals_prep = \
             self.preprocess(states=states, actions=actions, next_states=next_states, goals=goals)
-
+        
         self.discriminator.train()
         self.generator.train()
 
@@ -169,7 +178,7 @@ class AGO(BaseAgent):
 
     def train_value_function(self, batch_size, reanalysis):
         if reanalysis:
-            states, actions, next_states, goals = self.reanalysis_buffer.sample(batch_size, self.her_prob)
+            states, actions, next_states, goals = self.reanalysis_buffer.sample(batch_size, 0)
         else:
             states, actions, next_states, goals = self.replay_buffer.sample(batch_size, self.her_prob)
         achieved_goals = self.get_goal_from_state(next_states)

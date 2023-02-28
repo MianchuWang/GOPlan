@@ -11,6 +11,7 @@ class Controller:
         self.env_info = env_info
         self.agent = agent
         self.buffer = buffer
+        self.finetune_episode_steps = 500
         self.enable_wandb = enable_wandb
 
     def train(self):
@@ -20,11 +21,14 @@ class Controller:
             training_info = self.agent.pretrain_models()
             if i % 10000 == 0:
                 policy_eval_info = self.eval('policy')
-                print('The performance after pretraining ' + str(i) + ' steps: ')
-                print(policy_eval_info)
+                print('The performance after pretraining ' + str(i) + ' steps: ', policy_eval_info)
             if self.enable_wandb:
                 wandb.log({**training_info, **policy_eval_info})
         self.agent.save(self.env_info['env_name'] + '-pretrain')
+
+        self.agent.load(self.env_info['env_name'] + '-pretrain')
+        policy_eval_info = self.eval('policy')
+        print('The performance after pretraining is ', policy_eval_info)
 
         print('Finetuning ...')
         for i in range(50):
@@ -34,17 +38,16 @@ class Controller:
             inter_traj_info = self.agent.produce_inter_traj(num_traj=2000)
             if self.enable_wandb:
                 wandb.log({**intra_traj_info, **inter_traj_info})
-
+            
             # Finetune
-            for _ in tqdm(range(10000)):
+            for _ in tqdm(range(self.finetune_episode_steps)):
                 ft_training_info = self.agent.finetune_models()
                 if self.enable_wandb:
                     wandb.log(ft_training_info)
 
             # Evaluation
             ft_eval_info = self.eval('policy')
-            print('The performance after fine-tuning ' + str(i * 10000) + ' steps: ')
-            print(ft_eval_info)
+            print('The performance after fine-tuning ' + str((i+1) * self.finetune_episode_steps) + ' steps: ', ft_eval_info)
             if self.enable_wandb:
                 wandb.log({**ft_eval_info})
 

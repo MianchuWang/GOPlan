@@ -40,7 +40,9 @@ class Discriminator(nn.Module):
                                    nn.Linear(512, 1))
     def forward(self, states, actions, goals):
         input = torch.cat([states, actions, goals], dim=-1)
-        return torch.sigmoid(self.model(input))
+        score = torch.sigmoid(self.model(input))
+        # clip prevents NaN in the loss function.
+        return torch.clip(score, 0.0001, 0.9999)
 
 
 class Dynamics(nn.Module):
