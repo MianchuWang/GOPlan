@@ -1,8 +1,10 @@
 import gymnasium as gym
+import envs.gym_fetch_stack.envs as fetch_stack
+import numpy as np
 
 gym_robotics = ['FetchReach-v3', 'FetchPush-v2', 'FetchPickAndPlace-v2',
                 'FetchSlide-v2', 'HandReach-v0']
-bandit_env = ['bandit']
+gym_stack = ['FetchStack2Env']
 
 def get_goal_from_state(env_name):
     if env_name.startswith('FetchReach'):
@@ -29,16 +31,18 @@ def return_environment(env_name, render_mode):
                 'max_steps': env._max_episode_steps,
                 'get_goal_from_state': get_goal_from_state(env_name),
                 'compute_reward': lambda x, y, z : env.compute_reward(x, y, None) + 1}
-    elif env_name in bandit_env:
-        from envs.bandit import Bandit
-        env = Bandit()
-        return env, \
-               {'state_dim': env.state_dim,
-                'goal_dim': env.goal_dim,
-                'ac_dim': env.ac_dim,
-                'max_steps': env._max_episode_steps,
-                'get_goal_from_state': lambda x : x,
-                'compute_reward': None}
+    elif env_name in gym_stack:
+        if env_name == 'FetchStack2Env':
+            env = fetch_stack.FetchStack2Env()
+            return env, {'env_name': env_name,
+                         'state_dim': env.observation_space['observation'].shape[0],
+                         'goal_dim': env.observation_space['desired_goal'].shape[0],
+                         'ac_dim': env.action_space.shape[0],
+                         'max_steps': 50,
+                         'get_goal_from_state': lambda x : np.concatenate([x[10:13], x[25:28], x[:3]]),
+                         'compute_reward': lambda x, y, z : env.compute_reward(x, y, None) + 1}
+        else:
+            raise Exception('Invalid fetch stack environment.')
     else:
         raise Exception('Invalid environment.')
 

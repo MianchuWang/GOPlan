@@ -20,8 +20,8 @@ class AGO(BaseAgent):
 
         self.generator = Generator(self.state_dim, self.ac_dim, self.goal_dim, self.noise_dim).to(device=self.device)
         self.discriminator = Discriminator(self.state_dim, self.ac_dim, self.goal_dim).to(device=self.device)
-        self.generator_opt = torch.optim.Adam(self.generator.parameters(), lr=1e-4, betas=(0.5, 0.999))
-        self.discriminator_opt = torch.optim.Adam(self.discriminator.parameters(), lr=1e-4, betas=(0.5, 0.999))
+        self.generator_opt = torch.optim.Adam(self.generator.parameters(), lr=1e-4)
+        self.discriminator_opt = torch.optim.Adam(self.discriminator.parameters(), lr=1e-4)
         self.generator.eval()
         self.discriminator.eval()
 
@@ -38,8 +38,8 @@ class AGO(BaseAgent):
                                               compute_reward=self.compute_reward)
 
     def pretrain_models(self):
-        dynamics_info = self.train_dynamics(batch_size=512)
-        gan_info = self.train_gan(batch_size=128, reanalysis=False)
+        dynamics_info = {}#self.train_dynamics(batch_size=512)
+        gan_info = self.train_gan(batch_size=512, reanalysis=False)
         value_function_info = self.train_value_function(batch_size=512, reanalysis=False)
         if self.v_training_steps % 2 == 0:
             self.update_target_nets(self.v_net, self.v_target_net)
@@ -64,7 +64,7 @@ class AGO(BaseAgent):
             for i in range(self.max_steps - 1):
                 ac = self.plan(state.squeeze(), goal)
                 _, pred_actions[i], _, _ = self.preprocess(actions=ac[np.newaxis])
-                ns = self.dynamics.predict(pred_states[i].unsqueeze(0), pred_actions[i].unsqueeze(0), mean=False)
+                ns = self.dynamics.predict(pred_states[i].unsqueeze(0), pred_actions[i].unsqueeze(0), mean=True)
                 pred_states[i + 1] = ns
                 state, _, _, _ = self.postprocess(states=ns)
 
@@ -142,7 +142,7 @@ class AGO(BaseAgent):
         
         self.discriminator.train()
         self.generator.train()
-
+        
         achieved_goals = self.get_goal_from_state(next_states)
         rewards = self.compute_reward(achieved_goals, goals, None)[..., np.newaxis]
         rewards_tensor = torch.tensor(rewards, dtype=torch.float32, device=self.device)
@@ -150,17 +150,18 @@ class AGO(BaseAgent):
         next_v_value = self.v_net(next_states_prep, goals_prep)
         A = rewards_tensor + (1 - rewards_tensor) * self.discount * next_v_value - pred_v_value
         clip_exp_A = torch.clamp(torch.exp(10 * A), 0, 10)
-        weights = torch.softmax(clip_exp_A, dim=0)
-        
+        #weights = torch.softmax(clip_exp_A, dim=0)
+        weights = clip_exp_A
+
         noise = torch.randn(batch_size, self.noise_dim, device=self.device)
         fake_actions = self.generator(states_prep, goals_prep, noise)
         dis_loss_fake = self.discriminator(states_prep, fake_actions, goals_prep)
         dis_loss_real = self.discriminator(states_prep, actions_prep, goals_prep)
-        dis_loss = - (weights * torch.log(dis_loss_real)).sum() - torch.log(1 - dis_loss_fake).mean()
+        dis_loss = - (weights * torch.log(dis_loss_real)).mean() - torch.log(1 - dis_loss_fake).mean()
         self.discriminator_opt.zero_grad()
         dis_loss.backward()
         self.discriminator_opt.step()
-
+        
         noise = torch.randn(batch_size, self.noise_dim, device=self.device)
         fake_actions = self.generator(states_prep, goals_prep, noise)
         gen_loss = torch.log(1 - self.discriminator(states_prep, fake_actions, goals_prep)).mean()

@@ -64,6 +64,18 @@ class ReplayBuffer:
                     self.goals[entry, 0] * (1 - replace[..., np.newaxis])
         return ret_obs, ret_actions, ret_next_obs, ret_goals
 
+    def sample_sequence(self, batch_size, tau):
+        _, high = self.get_bounds()
+        entry = np.random.randint(0, high, batch_size)
+        index = np.random.randint(0, self.traj_len[entry] - tau, batch_size)
+        ret_obs = np.concatenate([self.obs[entry, np.newaxis, index + t] for t in range(tau)], axis=1)
+        ret_next_obs = np.concatenate([self.next_obs[entry, np.newaxis, index + t] for t in range(tau)], axis=1)
+        ret_actions = np.concatenate([self.actions[entry, np.newaxis, index + t] for t in range(tau)], axis=1)
+        goal_index = np.random.randint(index + tau, self.traj_len[entry], batch_size)
+        ret_goals = self.get_goal_from_state(self.obs[entry, np.newaxis, goal_index]).repeat(tau, axis=1)
+        return ret_obs, ret_actions, ret_next_obs, ret_goals
+
+
     def sample_inter_reanalysis(self):
         while True:
             _, high = self.get_bounds()

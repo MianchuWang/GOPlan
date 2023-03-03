@@ -25,11 +25,11 @@ class Controller:
             if self.enable_wandb:
                 wandb.log({**training_info, **policy_eval_info})
         self.agent.save(self.env_info['env_name'] + '-pretrain')
-
+        '''
         self.agent.load(self.env_info['env_name'] + '-pretrain')
         policy_eval_info = self.eval('policy')
         print('The performance after pretraining is ', policy_eval_info)
-
+        '''
         print('Finetuning ...')
         for i in range(50):
             # Intra-reanalysis
