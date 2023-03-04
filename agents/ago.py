@@ -38,7 +38,7 @@ class AGO(BaseAgent):
                                               compute_reward=self.compute_reward)
 
     def pretrain_models(self):
-        dynamics_info = {}#self.train_dynamics(batch_size=512)
+        dynamics_info = self.train_dynamics(batch_size=512)
         gan_info = self.train_gan(batch_size=512, reanalysis=False)
         value_function_info = self.train_value_function(batch_size=512, reanalysis=False)
         if self.v_training_steps % 2 == 0:
@@ -46,7 +46,7 @@ class AGO(BaseAgent):
         return {**gan_info, **value_function_info, **dynamics_info}
 
     def finetune_models(self):
-        gan_info = self.train_gan(batch_size=128, reanalysis=True)
+        gan_info = self.train_gan(batch_size=512, reanalysis=True)
         value_function_info = self.train_value_function(batch_size=512, reanalysis=True)
         if self.v_training_steps % 2 == 0:
             self.update_target_nets(self.v_net, self.v_target_net)
@@ -149,7 +149,7 @@ class AGO(BaseAgent):
         pred_v_value = self.v_net(states_prep, goals_prep)
         next_v_value = self.v_net(next_states_prep, goals_prep)
         A = rewards_tensor + (1 - rewards_tensor) * self.discount * next_v_value - pred_v_value
-        clip_exp_A = torch.clamp(torch.exp(10 * A), 0, 10)
+        clip_exp_A = torch.clamp(torch.exp(60 * A), 0, 10)
         #weights = torch.softmax(clip_exp_A, dim=0)
         weights = clip_exp_A
 
@@ -157,7 +157,7 @@ class AGO(BaseAgent):
         fake_actions = self.generator(states_prep, goals_prep, noise)
         dis_loss_fake = self.discriminator(states_prep, fake_actions, goals_prep)
         dis_loss_real = self.discriminator(states_prep, actions_prep, goals_prep)
-        dis_loss = - (weights * torch.log(dis_loss_real)).mean() - torch.log(1 - dis_loss_fake).mean()
+        dis_loss = - (weights * torch.log(dis_loss_real)).mean() - weights.mean() * torch.log(1 - dis_loss_fake).mean()
         self.discriminator_opt.zero_grad()
         dis_loss.backward()
         self.discriminator_opt.step()
