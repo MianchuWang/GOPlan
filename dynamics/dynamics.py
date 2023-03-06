@@ -16,12 +16,27 @@ class DynamicsModel(nn.Module):
         self.mse_loss = nn.MSELoss()
 
     def train_models(self, states, actions, next_states):
-        for i in range(self.num_models):
-            pred_next_states = self.models[i](states, actions)
-            loss = self.mse_loss(pred_next_states, next_states)
-            self.opts[i].zero_grad()
-            loss.backward()
-            self.opts[i].step()
+        if len(states.shape) == 2:
+            for i in range(self.num_models):
+                pred_next_states = self.models[i](states, actions)
+                loss = self.mse_loss(pred_next_states, next_states)
+                self.opts[i].zero_grad()
+                loss.backward()
+                self.opts[i].step()
+        elif len(states.shape) == 3:
+            tau = states.shape[1]
+            for i in range(self.num_models):
+                pred_next_states = torch.zeros_like(next_states)
+                curr_states = states[:, 0]
+                for t in range(tau):
+                    pred_next_states[:, t] = self.models[i](curr_states, actions[:, t])
+                    curr_states = pred_next_states[:, t]
+                loss = self.mse_loss(pred_next_states, next_states)
+                self.opts[i].zero_grad()
+                loss.backward()
+                self.opts[i].step()
+        else:
+            raise Exception('Invalid training data.')
         return {'dynamics_loss': loss.item()}
 
     def uncertainty(self, states, actions):

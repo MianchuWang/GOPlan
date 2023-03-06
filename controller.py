@@ -15,21 +15,26 @@ class Controller:
         self.enable_wandb = enable_wandb
 
     def train(self):
+        
         print('Pretraining ...')
         for i in tqdm(range(0, self.pretrain_steps)):
             policy_eval_info = {}
+            plan_eval_info = {}
             training_info = self.agent.pretrain_models()
-            if i % 10000 == 0:
+            if i % 20000 == 0:
                 policy_eval_info = self.eval('policy')
-                print('The performance after pretraining ' + str(i) + ' steps: ', policy_eval_info)
+                #plan_eval_info = self.eval('plan')
+                print('The performance after pretraining ' + str(i) + ' steps: ', 
+                        {**policy_eval_info, **plan_eval_info})
             if self.enable_wandb:
-                wandb.log({**training_info, **policy_eval_info})
+                wandb.log({**training_info, **policy_eval_info, **plan_eval_info})
         self.agent.save(self.env_info['env_name'] + '-pretrain')
-        '''
+        
         self.agent.load(self.env_info['env_name'] + '-pretrain')
         policy_eval_info = self.eval('policy')
-        print('The performance after pretraining is ', policy_eval_info)
-        '''
+        plan_eval_info = self.eval('plan')
+        print('The performance after pretraining is ', {**policy_eval_info, **plan_eval_info})
+        
         print('Finetuning ...')
         for i in range(50):
             # Intra-reanalysis

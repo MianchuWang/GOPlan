@@ -204,22 +204,26 @@ class AGO(BaseAgent):
             target_param.data.copy_(0.005 * param.data + 0.995 * target_param.data)
 
     def train_dynamics(self, batch_size):
-        states, actions, next_states, _ = self.replay_buffer.sample(batch_size, self.her_prob)
+        states, actions, next_states, _ = self.replay_buffer.sample_sequence(batch_size, tau=5)
         states_prep, actions_prep, next_states_prep, _ = \
-            self.preprocess(states=states, actions=actions, next_states=next_states)
-        dynamics_info = self.dynamics.train_models(states_prep, actions_prep, next_states_prep)
+            self.preprocess(states=states.reshape(-1, self.state_dim), 
+                            actions=actions.reshape(-1, self.ac_dim), 
+                            next_states=next_states.reshape(-1, self.state_dim))
+        dynamics_info = self.dynamics.train_models(states_prep.reshape(batch_size, -1, self.state_dim), 
+                                                   actions_prep.reshape(batch_size, -1, self.ac_dim), 
+                                                   next_states_prep.reshape(batch_size, -1, self.state_dim))
         return dynamics_info
 
     def get_action(self, state, goal):
         with torch.no_grad():
             state_prep, _, _, goal_prep = self.preprocess(states=state[np.newaxis], goals=goal[np.newaxis])
-            noise = torch.randn(1, self.noise_dim, device=self.device)
+            noise = torch.zeros(1, self.noise_dim, device=self.device)
             action = self.generator(state_prep, goal_prep, noise)
         return action.cpu().numpy().squeeze()
 
     def plan(self, state, goal):
         num_acs = 25
-        num_copies = 100
+        num_copies = 20
         max_steps = 20
 
         with torch.no_grad():
