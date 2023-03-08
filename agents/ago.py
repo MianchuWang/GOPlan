@@ -37,7 +37,7 @@ class AGO(BaseAgent):
                                               get_goal_from_state=self.get_goal_from_state,
                                               compute_reward=self.compute_reward)
 
-    def pretrain_models(self):
+    def train_models(self):
         dynamics_info = self.train_dynamics(batch_size=512)
         gan_info = self.train_gan(batch_size=512, reanalysis=False)
         value_function_info = self.train_value_function(batch_size=512, reanalysis=False)

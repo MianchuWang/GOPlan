@@ -17,7 +17,7 @@ from agents import return_agent
 from controller import Controller
 
 parser = argparse.ArgumentParser()
-parser.add_argument('--env_name', type=str, default='FetchPush-v2')
+parser.add_argument('--env_name', type=str, default='FetchPush-v1')
 parser.add_argument('--dataset', type=str, default='datasets/gym/expert/FetchPush')
 parser.add_argument('--agent', type=str, default='ago')
 parser.add_argument('--buffer_capacity', type=int, default=4000000)

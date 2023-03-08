@@ -2,8 +2,8 @@ import gymnasium as gym
 import envs.gym_fetch_stack.envs as fetch_stack
 import numpy as np
 
-gym_robotics = ['FetchReach-v3', 'FetchPush-v2', 'FetchPickAndPlace-v2',
-                'FetchSlide-v2', 'HandReach-v0']
+gym_robotics = ['FetchReach-v1', 'FetchPush-v1', 'FetchPickAndPlace-v1',
+                'FetchSlide-v1', 'HandReach-v0']
 gym_stack = ['FetchStack2Env']
 
 def get_goal_from_state(env_name):

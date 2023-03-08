@@ -20,7 +20,7 @@ class Controller:
         for i in tqdm(range(0, self.pretrain_steps)):
             policy_eval_info = {}
             plan_eval_info = {}
-            training_info = self.agent.pretrain_models()
+            training_info = self.agent.train_models()
             if i % 20000 == 0:
                 policy_eval_info = self.eval('policy')
                 #plan_eval_info = self.eval('plan')
