@@ -36,7 +36,7 @@ if args.enable_wandb:
     wandb.init(project='AGO', config=args)
 curr_time = time.gmtime()
 experiments_dir = '-'.join(['experiments/' + args.env_name.split('-')[0], str(curr_time.tm_mon), str(curr_time.tm_mday),
-                            str(curr_time.tm_hour), str(curr_time.tm_min), str(curr_time.tm_sec), '/'])
+                            str(curr_time.tm_hour), str(curr_time.tm_min), str(curr_time.tm_sec) + '/'])
 os.makedirs(experiments_dir, exist_ok=True)
 
 device = "cuda" if torch.cuda.is_available() else "cpu"
