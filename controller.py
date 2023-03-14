@@ -4,9 +4,10 @@ import wandb
 from tqdm import tqdm
 
 class Controller:
-    def __init__(self, pretrain_steps, eval_episodes, env, env_info, agent, buffer, enable_wandb):
+    def __init__(self, pretrain_steps, eval_episodes, experiments_dir, env, env_info, agent, buffer, enable_wandb):
         self.pretrain_steps = pretrain_steps
         self.eval_episodes = eval_episodes
+        self.experiments_dir = experiments_dir
         self.env = env
         self.env_info = env_info
         self.agent = agent
@@ -21,22 +22,19 @@ class Controller:
             policy_eval_info = {}
             plan_eval_info = {}
             training_info = self.agent.train_models()
-            if i % 20000 == 0:
+            if i % 5000 == 0:
                 policy_eval_info = self.eval('policy')
-                #plan_eval_info = self.eval('plan')
-                print('The performance after pretraining ' + str(i) + ' steps: ', 
-                        {**policy_eval_info, **plan_eval_info})
+                print('The performance after pretraining ' + str(i) + ' steps: ', policy_eval_info)
             if self.enable_wandb:
                 wandb.log({**training_info, **policy_eval_info, **plan_eval_info})
-        self.agent.save(self.env_info['env_name'] + '-pretrain')
+        self.agent.save(self.experiments_dir + self.env_info['env_name'] + '-pretrain')
         
-        self.agent.load(self.env_info['env_name'] + '-pretrain')
+        #self.agent.load(self.experiments_dir + self.env_info['env_name'] + '-pretrain')
         policy_eval_info = self.eval('policy')
-        plan_eval_info = self.eval('plan')
-        print('The performance after pretraining is ', {**policy_eval_info, **plan_eval_info})
+        print('The performance after pretraining is ', policy_eval_info)
         
         print('Finetuning ...')
-        for i in range(50):
+        for i in range(21):
             # Intra-reanalysis
             intra_traj_info, inter_traj_info = {}, {}
             intra_traj_info = self.agent.produce_intra_traj(num_traj=2000)
@@ -56,7 +54,7 @@ class Controller:
             if self.enable_wandb:
                 wandb.log({**ft_eval_info})
 
-        self.agent.save(self.env_info['env_name'] + '-finetune')
+        self.agent.save(self.experiments_dir + self.env_info['env_name'] + '-finetune')
 
     def eval(self, mode='plan'):
         returns = []

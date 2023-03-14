@@ -34,6 +34,11 @@ print(args)
 
 if args.enable_wandb:
     wandb.init(project='AGO', config=args)
+curr_time = time.gmtime()
+experiments_dir = '-'.join(['experiments/' + args.env_name.split('-')[0], str(curr_time.tm_mon), str(curr_time.tm_mday),
+                            str(curr_time.tm_hour), str(curr_time.tm_min), str(curr_time.tm_sec), '/'])
+os.makedirs(experiments_dir, exist_ok=True)
+
 device = "cuda" if torch.cuda.is_available() else "cpu"
 env, env_info = return_environment(args.env_name, render_mode=args.render_mode)
 random.seed(args.seed)
@@ -54,7 +59,7 @@ agent = return_agent(agent=args.agent, replay_buffer=buffer, state_dim=env_info[
                      compute_reward=env_info['compute_reward'])
 
 controller = Controller(pretrain_steps=args.pretrain_steps, eval_episodes=args.eval_episodes,
-                        enable_wandb=args.enable_wandb, env=env, env_info=env_info,
+                        enable_wandb=args.enable_wandb, experiments_dir=experiments_dir, env=env, env_info=env_info,
                         agent=agent, buffer=buffer)
 
 controller.train()
