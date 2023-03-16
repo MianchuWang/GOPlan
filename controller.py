@@ -67,7 +67,7 @@ class Controller:
                 else:
                     action = self.agent.get_action(obs['observation'], obs['desired_goal'])
                 obs, reward, _, _, info = self.env.step(action)
-                returns.append(reward)
+                returns.append(reward.item())
 
         mean_return = np.array(returns).sum() / self.eval_episodes
         return {'return (' + mode + ')': mean_return}
