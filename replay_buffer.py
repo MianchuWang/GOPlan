@@ -34,7 +34,21 @@ class ReplayBuffer:
         if self.curr_ptr == self.entries:
             self.curr_ptr = 0
             self.is_full = True
-
+            
+    def load_d4rl(self, env):
+        dataset = env.get_dataset()
+        size = dataset['observations'].shape[0]
+        start = 0
+        for i in range(0, size):
+            if dataset['timeouts'][i]:
+                if i - start > 1:
+                    self.push({'observations': dataset['observations'][start:i],
+                               'next_observations': dataset['observations'][start+1:i+1],
+                               'actions': dataset['actions'][start:i],
+                               'desired_goals': dataset['infos/goal'][start:i]
+                                })
+                start = i + 1  
+                
     def load_dataset(self, path):
         with open(path+'.pkl', 'rb') as f:
             loaded_data = joblib.load(f)

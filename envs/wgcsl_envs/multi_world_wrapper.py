@@ -48,10 +48,10 @@ class ReacherGoalWrapper(Wrapper):
 
         self.threshold = threshold
     
-    def reset(self):
+    def reset(self, seed=None):
         obs = self.env.reset()
         obs_dict = self.obs_to_dict(obs)
-        return obs_dict
+        return obs_dict, None
     
     def compute_rewards(self, achieved_goal, desired_goal, info=None):
         dist = np.linalg.norm(achieved_goal - desired_goal, axis=1) 
@@ -87,7 +87,7 @@ class ReacherGoalWrapper(Wrapper):
             info['is_success'] = True
         else:
             info['is_success'] = False
-        return obs_dict, reward, done, info
+        return obs_dict, np.array(reward) + 1, done, False, info
     
     def render(self, mode='human'):
         return self.env.render()
@@ -113,10 +113,10 @@ class PointGoalWrapper(Wrapper):
                 del env.observation_space.spaces[key]
 
         self.observation_space = env.observation_space
-        self.env.env.reward_type = 'sparse'
+        self.env.reward_type = 'sparse'
     
-    def reset(self):
-        return self.env.reset()
+    def reset(self, seed=None):
+        return self.env.reset(), None
     
     def step(self, action):
         obs_dict, reward, done, info = self.env.step(action)
@@ -125,7 +125,7 @@ class PointGoalWrapper(Wrapper):
             'desired_goal':obs_dict['desired_goal'],
             'achieved_goal':obs_dict['achieved_goal']
         }
-        return obs, reward, done, info
+        return obs, reward + 1, False, False, info
     
     def render(self, mode='human'):
         return self.env.render()
@@ -136,7 +136,7 @@ class PointGoalWrapper(Wrapper):
             'state_desired_goal':desired_goal
         }
         action = np.array([])
-        return self.env.compute_rewards(action, obs)
+        return self.env.compute_rewards(action, obs) + 1
 
     def sample_goal(self):
         goal_dict = self.env.sample_goal()

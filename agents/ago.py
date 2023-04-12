@@ -40,7 +40,7 @@ class AGO(BaseAgent):
     def train_models(self):
         dynamics_info = self.train_dynamics(batch_size=512)
         gan_info = self.train_gan(batch_size=512, reanalysis=False)
-        value_function_info = self.train_value_function(batch_size=512, reanalysis=False)
+        value_function_info = {}#self.train_value_function(batch_size=512, reanalysis=False)
         if self.v_training_steps % 2 == 0:
             self.update_target_nets(self.v_net, self.v_target_net)
         return {**gan_info, **value_function_info, **dynamics_info}
@@ -151,7 +151,7 @@ class AGO(BaseAgent):
         A = rewards_tensor + (1 - rewards_tensor) * self.discount * next_v_value - pred_v_value
         clip_exp_A = torch.clamp(torch.exp(60 * A), 0, 10)
         #weights = torch.softmax(clip_exp_A, dim=0)
-        weights = clip_exp_A
+        weights = torch.ones_like(clip_exp_A)
 
         noise = torch.randn(batch_size, self.noise_dim, device=self.device)
         fake_actions = self.generator(states_prep, goals_prep, noise)

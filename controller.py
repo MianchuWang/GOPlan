@@ -20,13 +20,14 @@ class Controller:
         print('Pretraining ...')
         for i in tqdm(range(0, self.pretrain_steps)):
             policy_eval_info = {}
-            plan_eval_info = {}
             training_info = self.agent.train_models()
+            
             if i % 5000 == 0:
                 policy_eval_info = self.eval('policy')
                 print('The performance after pretraining ' + str(i) + ' steps: ', policy_eval_info)
+            
             if self.enable_wandb:
-                wandb.log({**training_info, **policy_eval_info, **plan_eval_info})
+                wandb.log({**training_info, **policy_eval_info})
         self.agent.save(self.experiments_dir + self.env_info['env_name'] + '-pretrain')
         
         #self.agent.load(self.experiments_dir + self.env_info['env_name'] + '-pretrain')
@@ -34,7 +35,7 @@ class Controller:
         print('The performance after pretraining is ', policy_eval_info)
         
         print('Finetuning ...')
-        for i in range(21):
+        for i in range(10):
             # Intra-reanalysis
             intra_traj_info, inter_traj_info = {}, {}
             intra_traj_info = self.agent.produce_intra_traj(num_traj=2000)
