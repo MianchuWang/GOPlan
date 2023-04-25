@@ -3,6 +3,8 @@ from agents.bc import BC
 from agents.ago import AGO
 from agents.geaw import GEAW
 from agents.uncertainty import Uncertainty
+from agents.td3bc import TD3BC
+from agents.crl import CRL
 
 
 def return_agent(**agent_params):
@@ -16,5 +18,9 @@ def return_agent(**agent_params):
         return GEAW(**agent_params)
     elif agent_params['agent'] == 'uncertainty':
         return Uncertainty(**agent_params)
+    elif agent_params['agent'] == 'td3bc':
+        return TD3BC(**agent_params)
+    elif agent_params['agent'] == 'contrastive':
+        return CRL(**agent_params)
     else:
         raise Exception('Invalid agent!')

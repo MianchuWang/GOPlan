@@ -57,7 +57,7 @@ class ReacherGoalWrapper(Wrapper):
         dist = np.linalg.norm(achieved_goal - desired_goal, axis=1) 
         reward = np.zeros((achieved_goal.shape[0], 1))
         reward[np.where(dist > self.threshold)] = -1
-        return reward.reshape(-1)
+        return reward.reshape(-1) + 1
     
     def compute_reward(self, achieved_goal, desired_goal, info=None):
         if len(achieved_goal.shape) == 2 and achieved_goal.shape[0] > 1:
@@ -65,7 +65,7 @@ class ReacherGoalWrapper(Wrapper):
 
         dist = np.linalg.norm(achieved_goal - desired_goal) 
         reward = -1 if dist > self.threshold else 0
-        return reward
+        return reward + 1
     
     def obs_to_dict(self, obs):
         obs_g = self.env.goal.copy()
@@ -87,7 +87,7 @@ class ReacherGoalWrapper(Wrapper):
             info['is_success'] = True
         else:
             info['is_success'] = False
-        return obs_dict, np.array(reward) + 1, done, False, info
+        return obs_dict, np.array(reward), done, False, info
     
     def render(self, mode='human'):
         return self.env.render()
@@ -194,13 +194,13 @@ class SawyerGoalWrapper(Wrapper):
         elif self.reward_type == 'angle_success':
             info['is_success'] = info['angle_success']
 
-        return obs, reward + 1, False, False, info
+        return obs, reward+1, False, False, info
     
     def render(self, mode='human'):
         return self.env.render()
     
     def compute_reward(self, achieved_goal, desired_goal, info):
-        return self.compute_rewards(achieved_goal, desired_goal, info)
+        return self.compute_rewards(achieved_goal, desired_goal, info) + 1
     
     def compute_rewards(self, achieved_goal, desired_goal, info):
         obs = {

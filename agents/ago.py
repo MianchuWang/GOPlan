@@ -15,6 +15,9 @@ class AGO(BaseAgent):
 
         self.noise_dim = 64
         self.her_prob = 1.0
+        self.beta = 60
+        self.M = 10
+        self.c = 0
 
         self.dynamics = DynamicsModel(3, self.state_dim, self.ac_dim, self.device)
 
@@ -40,7 +43,7 @@ class AGO(BaseAgent):
     def train_models(self):
         dynamics_info = self.train_dynamics(batch_size=512)
         gan_info = self.train_gan(batch_size=512, reanalysis=False)
-        value_function_info = {}#self.train_value_function(batch_size=512, reanalysis=False)
+        value_function_info = self.train_value_function(batch_size=512, reanalysis=False)
         if self.v_training_steps % 2 == 0:
             self.update_target_nets(self.v_net, self.v_target_net)
         return {**gan_info, **value_function_info, **dynamics_info}
@@ -149,9 +152,8 @@ class AGO(BaseAgent):
         pred_v_value = self.v_net(states_prep, goals_prep)
         next_v_value = self.v_net(next_states_prep, goals_prep)
         A = rewards_tensor + (1 - rewards_tensor) * self.discount * next_v_value - pred_v_value
-        clip_exp_A = torch.clamp(torch.exp(60 * A), 0, 10)
-        #weights = torch.softmax(clip_exp_A, dim=0)
-        weights = torch.ones_like(clip_exp_A)
+        clip_exp_A = torch.clamp(torch.exp(self.beta * A + self.c), 0, self.M)
+        weights = clip_exp_A
 
         noise = torch.randn(batch_size, self.noise_dim, device=self.device)
         fake_actions = self.generator(states_prep, goals_prep, noise)
@@ -185,17 +187,19 @@ class AGO(BaseAgent):
         achieved_goals = self.get_goal_from_state(next_states)
         rewards = self.compute_reward(achieved_goals, goals, None)[..., np.newaxis]
         rewards_tensor = torch.tensor(rewards, dtype=torch.float32, device=self.device)
-        states_prep, actions_prep, next_states_prep, goals_prep = \
-            self.preprocess(states=states, actions=actions, next_states=next_states, goals=goals)
+        states_prep, _, next_states_prep, goals_prep = \
+            self.preprocess(states=states, next_states=next_states, goals=goals)
         with torch.no_grad():
             v_next_value = self.v_target_net(next_states_prep, goals_prep)
-            target_v_value = rewards_tensor + (1 - rewards_tensor) * self.discount * v_next_value
+            target_v_value = rewards_tensor + (1-rewards_tensor) * self.discount * v_next_value
         pred_v_value = self.v_net(states_prep, goals_prep)
         v_loss = ((target_v_value - pred_v_value) ** 2).mean()
         self.v_net_opt.zero_grad()
         v_loss.backward()
         self.v_net_opt.step()
+
         self.v_training_steps += 1
+        
         return {'v_loss': v_loss.item(),
                 'v_value': pred_v_value.mean().item()}
 

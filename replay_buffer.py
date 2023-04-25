@@ -110,7 +110,6 @@ class ReplayBuffer:
             entry = np.random.randint(0, high)
             start = np.random.randint(0, self.traj_len[entry]-1)
             end = np.random.randint(start+1, self.traj_len[entry])
-
             if self.compute_reward(self.get_goal_from_state(self.obs[entry, start]),
                                    self.get_goal_from_state(self.next_obs[entry, end]), None) == 0:
                 break

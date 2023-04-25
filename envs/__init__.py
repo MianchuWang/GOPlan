@@ -2,7 +2,7 @@ import numpy as np
 
 gym_robotics = ['FetchReach-v1', 'FetchPush-v1', 'FetchPickAndPlace-v1',
                 'FetchSlide-v1', 'HandReach-v0']
-gym_stack = ['FetchStack2Env']
+gym_stack = ['FetchStack2']
 points_envs = ['PointRooms', 'PointReach']
 sawyer_envs = ['SawyerReach', 'SawyerDoor']
 dmc_envs = ['Reacher-v2']
@@ -66,14 +66,14 @@ def return_gym_robotics_env(env_name, render_mode):
 def return_gym_stack_env(env_name, render_mode):
     import gymnasium as gym
     import envs.gym_fetch_stack.envs as fetch_stack
-    if env_name == 'FetchStack2Env':
-        env = fetch_stack.FetchStack2Env()
+    if env_name == 'FetchStack2':
+        env = fetch_stack.FetchStack2Env('sparse')
         return env, {'env_name': env_name,
                      'state_dim': env.observation_space['observation'].shape[0],
                      'goal_dim': env.observation_space['desired_goal'].shape[0],
                      'ac_dim': env.action_space.shape[0],
                      'max_steps': 50,
-                     'get_goal_from_state': lambda x : np.concatenate([x[10:13], x[25:28], x[:3]]),
+                     'get_goal_from_state': lambda x : np.concatenate([x[..., 10:13], x[..., 25:28]], axis=-1),
                      'compute_reward': lambda x, y, z : env.compute_reward(x, y, None) + 1}
 
 def return_wgcsl_env(env_name, render_mode):
@@ -108,7 +108,7 @@ def return_d4rl_env(env_name, render_mode):
         def reset(self, seed, **kwargs):
             """Resets the environment, returning a modified observation using :meth:`self.observation`."""
             obs = self.env.reset(**kwargs)
-            return self.observation(obs)
+            return self.observation(obs), None
         def observation(self, observation):
             return {'observation': observation, 
                     'achieved_goal': observation[:2],

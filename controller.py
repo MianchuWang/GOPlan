@@ -20,14 +20,16 @@ class Controller:
         print('Pretraining ...')
         for i in tqdm(range(0, self.pretrain_steps)):
             policy_eval_info = {}
+            plan_eval_info = {}
             training_info = self.agent.train_models()
             
             if i % 5000 == 0:
                 policy_eval_info = self.eval('policy')
-                print('The performance after pretraining ' + str(i) + ' steps: ', policy_eval_info)
+                #plan_eval_info = self.eval('plan')
+                print('The performance after pretraining ' + str(i) + ' steps: ', policy_eval_info, plan_eval_info)
             
             if self.enable_wandb:
-                wandb.log({**training_info, **policy_eval_info})
+                wandb.log({**training_info, **policy_eval_info, **plan_eval_info})
         self.agent.save(self.experiments_dir + self.env_info['env_name'] + '-pretrain')
         
         #self.agent.load(self.experiments_dir + self.env_info['env_name'] + '-pretrain')
@@ -35,7 +37,7 @@ class Controller:
         print('The performance after pretraining is ', policy_eval_info)
         
         print('Finetuning ...')
-        for i in range(10):
+        for i in range(20):
             # Intra-reanalysis
             intra_traj_info, inter_traj_info = {}, {}
             intra_traj_info = self.agent.produce_intra_traj(num_traj=2000)
@@ -67,8 +69,14 @@ class Controller:
                     action = self.agent.plan(obs['observation'], obs['desired_goal'])
                 else:
                     action = self.agent.get_action(obs['observation'], obs['desired_goal'])
-                obs, reward, _, _, info = self.env.step(action)
-                returns.append(reward.item())
-
+                if self.env_info['env_name'].startswith('antmaze'):
+                    obs, reward, _, info = self.env.step(action)
+                    returns.append(self.env.get_normalized_score(reward))
+                    if reward == 1:
+                        break
+                else:
+                    obs, reward, _, _, info = self.env.step(action)
+                    returns.append(reward.item())
+                #self.env.render()
         mean_return = np.array(returns).sum() / self.eval_episodes
         return {'return (' + mode + ')': mean_return}

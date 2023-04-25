@@ -14,27 +14,26 @@ from agents import return_agent
 from controller import Controller
 
 parser = argparse.ArgumentParser()
-parser.add_argument('--env_name', type=str, default='SawyerReach')
-parser.add_argument('--dataset', type=str, default='datasets/sawyer/expert/SawyerReach')
+parser.add_argument('--env_name', type=str, default='SawyerDoor')
+parser.add_argument('--dataset', type=str, default='datasets/sawyer/expert/SawyerDoor')
 parser.add_argument('--agent', type=str, default='ago')
 parser.add_argument('--buffer_capacity', type=int, default=4000000)
 parser.add_argument('--discount', type=float, default=0.98)
 parser.add_argument('--normalise', type=int, choices=[0, 1], default=1)
 parser.add_argument('--render_mode', type=str, default=None)
-parser.add_argument('--seed', type=int, default=400)
+parser.add_argument('--seed', type=int, default=00)
 
-parser.add_argument('--enable_wandb', type=int, choices=[0, 1], default=0)
-parser.add_argument('--pretrain_steps', type=int, default=100000)
-parser.add_argument('--eval_episodes', type=int, default=200)
+parser.add_argument('--enable_wandb', type=int, choices=[0, 1], default=1)
+parser.add_argument('--pretrain_steps', type=int, default=500000)
+parser.add_argument('--eval_episodes', type=int, default=100)
 args = parser.parse_args()
 print(args)
 
 if args.enable_wandb:
-    wandb.init(project='AGO', config=args)
+    wandb.init(project='ago', config=args)
 curr_time = time.gmtime()
 experiments_dir = '-'.join(['experiments/' + args.env_name.split('-')[0], str(curr_time.tm_mon), str(curr_time.tm_mday),
                             str(curr_time.tm_hour), str(curr_time.tm_min), str(curr_time.tm_sec) + '/'])
-experiments_dir = 'experiments/test/'
 os.makedirs(experiments_dir, exist_ok=True)
 
 device = "cuda" if torch.cuda.is_available() else "cpu"
