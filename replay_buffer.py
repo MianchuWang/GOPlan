@@ -5,10 +5,10 @@ class ReplayBuffer:
     def __init__(self, buffer_size, state_dim, ac_dim, goal_dim, max_steps, get_goal_from_state, compute_reward):
 
         self.entries = int(buffer_size / max_steps)
-        self.obs = np.zeros((self.entries, max_steps, state_dim), dtype=np.float64)
-        self.next_obs = np.zeros((self.entries, max_steps, state_dim), dtype=np.float64)
-        self.actions = np.zeros((self.entries, max_steps, ac_dim))
-        self.goals = np.zeros((self.entries, max_steps, goal_dim), dtype=np.float64)
+        self.obs = np.zeros((self.entries, max_steps, state_dim), dtype=np.float32)
+        self.next_obs = np.zeros((self.entries, max_steps, state_dim), dtype=np.float32)
+        self.actions = np.zeros((self.entries, max_steps, ac_dim), dtype=np.float32)
+        self.goals = np.zeros((self.entries, max_steps, goal_dim), dtype=np.float32)
         self.traj_len = np.zeros((self.entries), dtype=np.int32)
 
         self.state_dim = state_dim
@@ -50,14 +50,17 @@ class ReplayBuffer:
                 start = i + 1  
                 
     def load_dataset(self, path):
-        with open(path+'.pkl', 'rb') as f:
+        if '.pkl' not in path:
+            path = path + '.pkl'
+        with open(path, 'rb') as f:
             loaded_data = joblib.load(f)
         size = loaded_data['o'].shape[0]
         for i in range(size):
             self.push({'observations': loaded_data['o'][i, :-1],
                        'next_observations': loaded_data['o'][i, 1:],
                        'actions': loaded_data['u'][i],
-                       'desired_goals': loaded_data['g'][i]})
+                       'desired_goals': loaded_data['g'][i],
+                       })
 
     def get_bounds(self):
         boarder = self.entries if self.is_full else self.curr_ptr

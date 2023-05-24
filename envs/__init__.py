@@ -1,9 +1,14 @@
 import numpy as np
+import gym
 
 gym_robotics = ['FetchReach-v1', 'FetchPush-v1', 'FetchPickAndPlace-v1',
-                'FetchSlide-v1', 'HandReach-v0']
+                'FetchSlide-v1', 'HandReach-v0', 
+                'FetchPushOOD-Right2Right-v1', 'FetchPushOOD-Left2Left-v1',
+                'FetchPushOOD-Left2Right-v1', 'FetchPushOOD-Right2Left-v1',
+                'FetchPickOOD-Right2Right-v1', 'FetchPickOOD-Right2Left-v1',
+                'FetchPickOOD-Left2Left-v1', 'FetchPickOOD-Left2Right-v1']
 gym_stack = ['FetchStack2']
-points_envs = ['PointRooms', 'PointReach']
+points_envs = ['PointRooms', 'PointReach', 'PointCross']
 sawyer_envs = ['SawyerReach', 'SawyerDoor']
 dmc_envs = ['Reacher-v2']
 d4rl_antmaze_envs = ['antmaze-umaze-v2', 'antmaze-umaze-diverse-v2',
@@ -29,6 +34,8 @@ def get_goal_from_state(env_name):
         return lambda x : x[..., -3:-1]
     elif env_name.startswith('PointRooms') or env_name.startswith('PointReach'):
         return lambda x : x
+    elif env_name.startswith('PointCross'):
+        return lambda x : x
     else:
         raise Exception('Invalid environment. The environments options are', gym_robotics +
                         gym_stack + sawyer_envs + points_envs)
@@ -44,16 +51,28 @@ def return_environment(env_name, render_mode):
         return return_d4rl_env(env_name, render_mode)
     else:
         raise Exception('Invalid environment.')
+    
+
 
 
 def return_gym_robotics_env(env_name, render_mode):
-    import gymnasium as gym
+    # import gymnasium as gym
+    from wgcsl.envs.fetch_ood import FetchPickOODEnv, FetchPushOODEnv
     
     class GymWrapper(gym.RewardWrapper):
         def reward(self, reward):
             # return = 1 if success else 0
             return reward + 1
-    env = gym.make(env_name, render_mode=render_mode)
+    if 'OOD' in env_name:
+        kwargs = get_ood_config(env_name)
+        if 'Push' in env_name:
+            env = FetchPushOODEnv(**kwargs)
+        else:
+            env = FetchPickOODEnv(**kwargs)
+    else:
+        print(env_name)
+        env = gym.make(env_name)
+
     return GymWrapper(env), \
            {'env_name': env_name,
             'state_dim': env.observation_space['observation'].shape[0],
@@ -64,7 +83,7 @@ def return_gym_robotics_env(env_name, render_mode):
             'compute_reward': lambda x, y, z : env.compute_reward(x, y, None) + 1}
     
 def return_gym_stack_env(env_name, render_mode):
-    import gymnasium as gym
+    # import gymnasium as gym
     import envs.gym_fetch_stack.envs as fetch_stack
     if env_name == 'FetchStack2':
         env = fetch_stack.FetchStack2Env('sparse')
@@ -90,6 +109,28 @@ def return_wgcsl_env(env_name, render_mode):
     elif env_name.startswith('PointReach'):
         from envs.wgcsl_envs.point2d import Point2DEnv
         env = PointGoalWrapper(Point2DEnv())
+    elif env_name.startswith('PointCross'):
+        from envs.wgcsl_envs.point2d import Point2DWallEnv
+        kwargs={
+            'action_scale': 1,
+            'wall_shape': 'cross', 
+            'wall_thickness': 1,
+            'target_radius':0.5,
+            'ball_radius':0.3,
+            'boundary_dist':10,
+            'render_size': 512,
+            'wall_color': 'darkgray',
+            'bg_color': 'white',
+            'images_are_rgb': True,
+            'render_onscreen': False,
+            'show_goal': True,
+            'get_image_base_render_size': (48, 48),
+            'fixed_goal': (-10,0),
+            'fixed_goal_set': None,
+            'fixed_init_position': (0,10), 
+            'randomize_position_on_reset': False
+        }
+        env = PointGoalWrapper(Point2DWallEnv(**kwargs))
     elif env_name.startswith('Reacher-v2'):
         import gym
         env = ReacherGoalWrapper(gym.make(env_name))
@@ -127,3 +168,67 @@ def return_d4rl_env(env_name, render_mode):
                              'max_steps': env._max_episode_steps, 
                              'get_goal_from_state': lambda x : x[..., :2],
                              'compute_reward': lambda x, y, z: (np.linalg.norm(x - y, axis=-1) <= 0.5).astype(np.float32)}
+
+
+
+def get_ood_config(env_name):
+    if env_name == 'FetchPushOOD-Right2Left-v1':
+        kwargs={
+            'goal_type': 'left',
+            'initial_type': 'right',
+            'obj_range': 0.15,
+            'target_range': 0.15 
+         }
+    elif env_name == 'FetchPushOOD-Left2Right-v1':
+        kwargs={
+            'goal_type': 'right',
+            'initial_type': 'left',
+            'obj_range': 0.15,
+            'target_range': 0.15 
+         }
+    elif env_name == 'FetchPushOOD-Left2Left-v1':
+        kwargs={
+            'goal_type': 'left',
+            'initial_type': 'left',
+            'obj_range': 0.15,
+            'target_range': 0.15 
+         }
+    elif env_name == 'FetchPushOOD-Right2Right-v1':
+        kwargs={
+            'goal_type': 'right',
+            'initial_type': 'right',
+            'obj_range': 0.15,
+            'target_range': 0.15 
+         }
+    elif env_name == 'FetchPickOOD-Right2Right-v1':
+        kwargs={
+            'goal_type': 'right',
+            'initial_type': 'right',
+            'obj_range': 0.15,
+            'target_range': 0.15 
+         }
+    elif env_name == 'FetchPickOOD-Right2Left-v1':
+        kwargs={
+            'goal_type': 'left',
+            'initial_type': 'right',
+            'obj_range': 0.15,
+            'target_range': 0.15 
+         }
+    elif env_name == 'FetchPickOOD-Left2Left-v1':
+        kwargs={
+            'goal_type': 'left',
+            'initial_type': 'left',
+            'obj_range': 0.15,
+            'target_range': 0.15 
+         }
+    elif env_name == 'FetchPickOOD-Left2Right-v1':
+        kwargs={
+            'goal_type': 'right',
+            'initial_type': 'left',
+            'obj_range': 0.15,
+            'target_range': 0.15 
+         }
+    else:
+        raise NotImplementedError
+
+    return kwargs

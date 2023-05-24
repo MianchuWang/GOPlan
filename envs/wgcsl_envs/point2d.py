@@ -5,14 +5,14 @@ import numpy as np
 from gym import spaces
 from pygame import Color
 
-from envs.wgcsl_envs.multitask_env import MultitaskEnv
-from envs.wgcsl_envs.serializable import Serializable
-from envs.wgcsl_envs.env_util import (
+from wgcsl.envs.multitask_env import MultitaskEnv
+from wgcsl.envs.serializable import Serializable
+from wgcsl.envs.env_util import (
     get_stat_in_paths,
     create_stats_ordered_dict,
 )
-from envs.wgcsl_envs.pygame_viewer import PygameViewer
-from envs.wgcsl_envs.walls import VerticalWall, HorizontalWall
+from wgcsl.envs.pygame_viewer import PygameViewer
+from wgcsl.envs.walls import VerticalWall, HorizontalWall
 
 
 class Point2DEnv(MultitaskEnv, Serializable):
@@ -35,7 +35,9 @@ class Point2DEnv(MultitaskEnv, Serializable):
             walls=None,
             fixed_goal=None,
             fixed_goal_set=None,
+            fixed_goal_set_id=0,
             fixed_init_position=None,
+            circle_radius=0,
             randomize_position_on_reset=True,
             images_are_rgb=False,  # else black and white
             show_goal=True,
@@ -52,7 +54,27 @@ class Point2DEnv(MultitaskEnv, Serializable):
             fixed_goal = np.array(fixed_goal)
         if fixed_goal_set is not None:
             self.fixed_set = True
-            self.fixed_goal_set = [(4,-4), (-4,4), (4,4), (-4,-4)]
+            #### circle
+            # circle_radius = 20
+            angle = np.linspace(0,1,10) * np.pi
+            x,y = circle_radius * np.cos(angle), circle_radius * np.sin(angle)
+            gs = np.concatenate([x.reshape(-1,1), y.reshape(-1,1)], 1)
+            gs2 = np.concatenate([x.reshape(-1,1), - y.reshape(-1,1)], 1)
+            goals = np.concatenate([gs, gs2])
+            if fixed_goal_set_id == 0:
+                goal_tmp = goals
+            elif fixed_goal_set_id == 1:
+                goal_tmp = goals[:10]
+            elif fixed_goal_set_id == 2:
+                goal_tmp = goals[10:]
+            elif fixed_goal_set_id == 3:
+                goal_tmp = goals[15:]
+            else:
+                goal_tmp = goals
+
+            self.fixed_goal_set = goal_tmp
+            # import pdb;pdb.set_trace()
+            # [(4,-4), (-4,4), (4,4), (-4,-4)]
         else:
             self.fixed_set = False
         if fixed_init_position is not None:
@@ -371,6 +393,13 @@ class Point2DEnv(MultitaskEnv, Serializable):
         goal = goal_dict["state_desired_goal"]
         self._position = goal
         self._target_position = goal
+    
+    def set_goal(self, goal_id):
+        if self.fixed_set:
+            if type(goal_id) == np.ndarray or type(goal_id) == list: 
+                self._target_position = goal_id[0]
+            else:
+                self._target_position = self.fixed_goal_set[goal_id]
 
     def get_env_state(self):
         return self._get_obs()
@@ -775,22 +804,82 @@ class Point2DWallEnv(Point2DEnv):
                     -self.boundary_dist * 1.05,
                     self.wall_thickness
                 )
+            ]
+            
+        if wall_shape == 'cross':
+            self.walls = [
+                 VerticalWall(
+                    self.ball_radius,
+                    -self.boundary_dist * 0.2,
+                    -self.boundary_dist,
+                    -self.boundary_dist * 0.2,
+                    1
+                ),
+                HorizontalWall(
+                    self.ball_radius,
+                    -self.boundary_dist * 0.2,
+                    -self.boundary_dist * 1.0,
+                    -self.boundary_dist * 0.2,
+                    self.wall_thickness
+                ),
+                VerticalWall(
+                    self.ball_radius,
+                    -self.boundary_dist * 0.2,
+                    self.boundary_dist * 0.2,
+                    self.boundary_dist * 1,
+                    1
+                ),
+                HorizontalWall(
+                    self.ball_radius,
+                    self.boundary_dist * 0.2,
+                    -self.boundary_dist * 1.0,
+                    -self.boundary_dist * 0.2,
+                    self.wall_thickness
+                ),
 
+                 VerticalWall(
+                    self.ball_radius,
+                    self.boundary_dist * 0.2,
+                    -self.boundary_dist,
+                    -self.boundary_dist * 0.2,
+                    1
+                ),
+                HorizontalWall(
+                    self.ball_radius,
+                    -self.boundary_dist * 0.2,
+                    self.boundary_dist * 0.2,
+                    self.boundary_dist * 1.0,
+                    self.wall_thickness
+                ),
+                VerticalWall(
+                    self.ball_radius,
+                    self.boundary_dist * 0.2,
+                    self.boundary_dist * 0.2,
+                    self.boundary_dist * 1,
+                    1
+                ),
+                HorizontalWall(
+                    self.ball_radius,
+                    self.boundary_dist * 0.2,
+                    self.boundary_dist * 0.2,
+                    self.boundary_dist * 1,
+                    self.wall_thickness
+                ),
             ]
         if wall_shape == "none":
             self.walls = []
 
 
-if __name__ == "__main__":
-    import gym
-    import matplotlib.pyplot as plt
+# if __name__ == "__main__":
+#     import gym
+#     import matplotlib.pyplot as plt
 
-    # e = gym.make('Point2D-Box-Wall-v1')
-    # e = gym.make('Point2D-Big-UWall-v1')
-    e = gym.make('Point2D-Easy-UWall-v1')
-    for i in range(1000):
-        e.reset()
-        for j in range(5):
-            e.step(np.random.rand(2))
-            e.render()
-            im = e.get_image()
+#     # e = gym.make('Point2D-Box-Wall-v1')
+#     # e = gym.make('Point2D-Big-UWall-v1')
+#     e = gym.make('Point2D-Easy-UWall-v1')
+#     for i in range(1000):
+#         e.reset()
+#         for j in range(5):
+#             e.step(np.random.rand(2))
+#             e.render()
+#             im = e.get_image()

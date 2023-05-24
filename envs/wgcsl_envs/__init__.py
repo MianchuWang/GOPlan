@@ -79,3 +79,84 @@ def register_envs():
         id='SawyerDoor-v0',
         entry_point='wgcsl.envs.sawyer_door:SawyerDoorGoalEnv',
     )
+        register(
+        id='FetchPushOOD-Right2Left-v1',
+        entry_point='wgcsl.envs.fetch_ood:FetchPushOODEnv',
+         kwargs={
+            'goal_type': 'left',
+            'initial_type': 'right',
+            'obj_range': 0.15,
+            'target_range': 0.15 
+         },
+    )
+    register(
+        id='FetchPushOOD-Left2Right-v1',
+        entry_point='wgcsl.envs.fetch_ood:FetchPushOODEnv',
+         kwargs={
+            'goal_type': 'right',
+            'initial_type': 'left',
+            'obj_range': 0.15,
+            'target_range': 0.15 
+         },
+    )
+    register(
+        id='FetchPushOOD-Left2Left-v1',
+        entry_point='wgcsl.envs.fetch_ood:FetchPushOODEnv',
+         kwargs={
+            'goal_type': 'left',
+            'initial_type': 'left',
+            'obj_range': 0.15,
+            'target_range': 0.15 
+         },
+    )
+    register(
+        id='FetchPushOOD-Right2Right-v1',
+        entry_point='wgcsl.envs.fetch_ood:FetchPushOODEnv',
+         kwargs={
+            'goal_type': 'right',
+            'initial_type': 'right',
+            'obj_range': 0.15,
+            'target_range': 0.15 
+         },
+    )
+    ## Pick
+    register(
+        id='FetchPickOOD-Right2Right-v1',
+        entry_point='wgcsl.envs.fetch_ood:FetchPickOODEnv',
+         kwargs={
+            'goal_type': 'right',
+            'initial_type': 'right',
+            'obj_range': 0.15,
+            'target_range': 0.15 
+         },
+    )
+    register(
+        id='FetchPickOOD-Right2Left-v1',
+        entry_point='wgcsl.envs.fetch_ood:FetchPickOODEnv',
+         kwargs={
+            'goal_type': 'left',
+            'initial_type': 'right',
+            'obj_range': 0.15,
+            'target_range': 0.15 
+         },
+    )
+    register(
+        id='FetchPickOOD-Left2Left-v1',
+        entry_point='wgcsl.envs.fetch_ood:FetchPickOODEnv',
+         kwargs={
+            'goal_type': 'left',
+            'initial_type': 'left',
+            'obj_range': 0.15,
+            'target_range': 0.15 
+         },
+    )
+    register(
+        id='FetchPickOOD-Left2Right-v1',
+        entry_point='wgcsl.envs.fetch_ood:FetchPickOODEnv',
+         kwargs={
+            'goal_type': 'right',
+            'initial_type': 'left',
+            'obj_range': 0.15,
+            'target_range': 0.15 
+         },
+    )

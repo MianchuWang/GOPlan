@@ -95,3 +95,8 @@ class TD3BC(BaseAgent):
         return {'q_loss': q_loss.item(), 
                 'pred_value': pred_q_value.mean().item(), 
                 'target_value': target_q_value.mean().item()}
+
+    def save(self, path):
+        models = (self.policy, self.target_policy, self.q_nets, self.q_target_nets)
+        import joblib
+        joblib.dump(models, path)

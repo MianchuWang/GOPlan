@@ -33,3 +33,11 @@ class BC(BaseAgent):
             ac_dist, action = self.policy(state_prep, goal_prep)
         return action.cpu().numpy().squeeze()
         #return ac_dist.sample().cpu().numpy().squeeze()
+
+    def plan(self, state, goal):
+        return self.get_action(state, goal)
+
+    def save(self, path):
+        models = (self.policy)
+        import joblib
+        joblib.dump(models, path)

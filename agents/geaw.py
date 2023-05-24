@@ -16,7 +16,7 @@ class GEAW(GCSL):
     def train_models(self, batch_size=512):
         value_info = self.train_value_function(batch_size=512)
         policy_info = self.train_policy(batch_size=512)
-        if self.v_training_steps % 40 == 0:
+        if self.v_training_steps % 2 == 0:
             self.update_target_nets(self.v_net, self.v_target_net)
         return {**value_info, **policy_info}
 
@@ -48,7 +48,7 @@ class GEAW(GCSL):
     def train_policy(self, batch_size):
         states, actions, next_states, goals = self.sample_func(batch_size)
         achieved_goals = self.get_goal_from_state(next_states)
-        rewards = self.compute_reward(achieved_goals, goals, None)[..., np.newaxis] + 1
+        rewards = self.compute_reward(achieved_goals, goals, None)[..., np.newaxis] 
         rewards = torch.tensor(rewards, dtype=torch.float32, device=self.device)
         states_prep, actions_prep, next_states_prep, goals_prep = \
             self.preprocess(states=states, actions=actions, next_states=next_states, goals=goals)
@@ -64,4 +64,9 @@ class GEAW(GCSL):
         loss.backward()
         self.policy_opt.step()
 
-        return {'policy_loss': loss.item()}
+        return {'policy_loss': loss.item(), 'training reward': rewards.mean().item()}
+
+    def save(self, path):
+        models = (self.policy, self.v_net, self.v_target_net)
+        import joblib
+        joblib.dump(models, path)

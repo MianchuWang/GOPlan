@@ -46,7 +46,8 @@ class BaseAgent(object):
         self.state_scaler.fit(states + state_noise * np.random.randn(*states.shape))
         self.diff_scaler.fit(diff + diff_noise * np.random.randn(*diff.shape))
 
-    def preprocess(self, states=None, actions=None, next_states=None, goals=None):
+    def preprocess(self, states=None, actions=None, next_states=None, goals=None
+                    ):
         if states is not None:
             if self.normalise:
                 states = self.state_scaler.transform(states)

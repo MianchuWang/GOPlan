@@ -41,16 +41,33 @@ class AGO(BaseAgent):
                                               compute_reward=self.compute_reward)
 
     def train_models(self):
-        dynamics_info = self.train_dynamics(batch_size=512)
-        gan_info = self.train_gan(batch_size=512, reanalysis=False)
-        value_function_info = self.train_value_function(batch_size=512, reanalysis=False)
+        states, actions, next_states, goals = self.replay_buffer.sample(512, her_prob=self.her_prob)
+        states_prep, actions_prep, next_states_prep, goals_prep = \
+            self.preprocess(states=states, actions=actions, next_states=next_states, goals=goals)
+        # prepare rewards
+        achieved_goals = self.get_goal_from_state(next_states)
+        rewards = self.compute_reward(achieved_goals, goals, None)[..., np.newaxis]
+        rewards_tensor = torch.tensor(rewards, dtype=torch.float32, device=self.device)
+
+        dynamics_info = self.train_dynamics(states_prep, actions_prep, next_states_prep, batch_size=512)
+        gan_info = self.train_gan(states_prep, actions_prep, next_states_prep, goals_prep, rewards_tensor,batch_size=512)
+        value_function_info = self.train_value_function(states_prep, next_states_prep, goals_prep, rewards_tensor, batch_size=512)
         if self.v_training_steps % 2 == 0:
             self.update_target_nets(self.v_net, self.v_target_net)
         return {**gan_info, **value_function_info, **dynamics_info}
 
     def finetune_models(self):
-        gan_info = self.train_gan(batch_size=512, reanalysis=True)
-        value_function_info = self.train_value_function(batch_size=512, reanalysis=True)
+        # reanalysis
+        states, actions, next_states, goals = self.reanalysis_buffer.sample(512, her_prob=0)
+        states_prep, actions_prep, next_states_prep, goals_prep = \
+            self.preprocess(states=states, actions=actions, next_states=next_states, goals=goals)
+        # prepare rewards
+        achieved_goals = self.get_goal_from_state(next_states)
+        rewards = self.compute_reward(achieved_goals, goals, None)[..., np.newaxis]
+        rewards_tensor = torch.tensor(rewards, dtype=torch.float32, device=self.device)
+
+        gan_info = self.train_gan(states_prep, actions_prep, next_states_prep, goals_prep, rewards_tensor, batch_size=512)
+        value_function_info = self.train_value_function(states_prep, next_states_prep, goals_prep, rewards_tensor, batch_size=512)
         if self.v_training_steps % 2 == 0:
             self.update_target_nets(self.v_net, self.v_target_net)
         return {**gan_info, **value_function_info}
@@ -63,18 +80,23 @@ class AGO(BaseAgent):
             state, goal = self.replay_buffer.sample_inter_reanalysis()
             pred_states = torch.zeros(self.max_steps, self.state_dim, device=self.device)
             pred_actions = torch.zeros(self.max_steps, self.ac_dim, device=self.device)
-            pred_states[0], _, _, _ = self.preprocess(states=state[np.newaxis])
+            pred_states[0], _, _, pred_goal = self.preprocess(states=state[np.newaxis], goals=goal[np.newaxis])
+            s = pred_states[0].unsqueeze(0)
             for i in range(self.max_steps - 1):
-                ac = self.plan(state.squeeze(), goal)
-                _, pred_actions[i], _, _ = self.preprocess(actions=ac[np.newaxis])
-                ns = self.dynamics.predict(pred_states[i].unsqueeze(0), pred_actions[i].unsqueeze(0), mean=True)
-                pred_states[i + 1] = ns
-                state, _, _, _ = self.postprocess(states=ns)
+                with torch.no_grad():
+                    ac = self.plan_gpu(s, pred_goal, goal)
+                    ns = self.dynamics.predict(pred_states[i].unsqueeze(0), ac.unsqueeze(0), mean=True)
+                
+                pred_actions[i] = ac
+                pred_states[i+1] = ns
+                s = ns
 
-                if self.dynamics.uncertainty(pred_states[i:i+2], pred_actions[i:i+1]) > 0.1:
+                if self.dynamics.uncertainty(pred_states[i:i+1], pred_actions[i:i+1]) > 0.1:
                     uncertain_traj += 1
                     break
-                if self.compute_reward(self.get_goal_from_state(state), goal[np.newaxis], None):
+                
+                s_np, _, _, _ = self.postprocess(states=s)
+                if self.compute_reward(self.get_goal_from_state(s_np), goal[np.newaxis], None):
                     states_post, actions_post, _, _ = self.postprocess(states=pred_states[:i + 2],
                                                                        actions=pred_actions[:i + 1])
                     self.reanalysis_buffer.push(
@@ -82,6 +104,7 @@ class AGO(BaseAgent):
                          'actions': actions_post, 'desired_goals': goal[np.newaxis].repeat(i+1, axis=0)})
                     new_traj += 1
                     break
+                    
                 if i == self.max_steps - 2:
                     failed_traj += 1
                     states_post, actions_post, _, _ = self.postprocess(states=pred_states[:i + 2],
@@ -102,21 +125,25 @@ class AGO(BaseAgent):
             states, actions, next_states, goals = self.replay_buffer.sample_intra_reanalysis()
             pred_states = torch.zeros(states.shape[0], self.state_dim, device=self.device)
             pred_actions = torch.zeros(states.shape[0], self.ac_dim, device=self.device)
-            pred_states[0], _, _, _ = self.preprocess(states=states[0][np.newaxis])
-            s = states[0]
+            pred_states[0], _, _, pred_goal = self.preprocess(states=states[0][np.newaxis], goals=goals[0][np.newaxis])
+            s = pred_states[0].unsqueeze(0)
             for i in range(states.shape[0] - 1):
-                ac = self.plan(s.squeeze(), goals[i])
-                _, pred_actions[i], _, _ = self.preprocess(actions=ac[np.newaxis])
-                ns = self.dynamics.predict(pred_states[i].unsqueeze(0), pred_actions[i].unsqueeze(0), mean=True)
+                with torch.no_grad():
+                    ac = self.plan_gpu(s, pred_goal, goals[0])
+                    ns = self.dynamics.predict(pred_states[i].unsqueeze(0), ac.unsqueeze(0), mean=True)
+                
+                pred_actions[i] = ac
                 pred_states[i+1] = ns
+                s = ns
 
-                s, _, _, _ = self.postprocess(states=ns)
-                if self.dynamics.uncertainty(pred_states[i:i+2], pred_actions[i:i+1]) > 0.1:
+                if self.dynamics.uncertainty(pred_states[i:i+1], pred_actions[i:i+1]) > 0.1:
                     self.reanalysis_buffer.push({'observations': states, 'next_observations': next_states,
                                                  'actions': actions, 'desired_goals': goals})
                     uncertain_traj += 1
                     break
-                if self.compute_reward(self.get_goal_from_state(s), goals[i][np.newaxis], None):
+
+                s_np, _, _, _ = self.postprocess(states=s)
+                if self.compute_reward(self.get_goal_from_state(s_np), goals[i][np.newaxis], None):
                     states_post, actions_post, _, _ = self.postprocess(states=pred_states[:i+2], actions=pred_actions[:i+1])
                     self.reanalysis_buffer.push({'observations': states_post[:-1], 'next_observations': states_post[1:],
                                                  'actions': actions_post, 'desired_goals': goals[:i+1]})
@@ -130,25 +157,16 @@ class AGO(BaseAgent):
                 'intra uncertain traj': uncertain_traj / num_traj,
                 'intra failed traj': failed_traj / num_traj}
 
-    def train_gan(self, batch_size, reanalysis=False):
+    def train_gan(self, states_prep, actions_prep, next_states_prep, goals_prep, rewards_tensor, batch_size):
         # Real actions -> higher score
         # Fake actions -> lower score
-        if reanalysis:
-            states, actions, next_states, goals = self.reanalysis_buffer.sample(batch_size, her_prob=0)
-        else:
-            states, actions, next_states, goals = self.replay_buffer.sample(batch_size, her_prob=self.her_prob)
-        states += 0.0001 * np.random.randn(*states.shape)
-        next_states += 0.0001 * np.random.randn(*next_states.shape)
-        goals += 0.0001 * np.random.randn(*goals.shape)
-        states_prep, actions_prep, next_states_prep, goals_prep = \
-            self.preprocess(states=states, actions=actions, next_states=next_states, goals=goals)
-        
+        states_prep += 0.0001 * torch.randn(*states_prep.shape, device=self.device)
+        next_states_prep += 0.0001 * torch.randn(*states_prep.shape, device=self.device)
+        goals_prep += 0.0001 * torch.randn(*goals_prep.shape, device=self.device)
+
         self.discriminator.train()
         self.generator.train()
         
-        achieved_goals = self.get_goal_from_state(next_states)
-        rewards = self.compute_reward(achieved_goals, goals, None)[..., np.newaxis]
-        rewards_tensor = torch.tensor(rewards, dtype=torch.float32, device=self.device)
         pred_v_value = self.v_net(states_prep, goals_prep)
         next_v_value = self.v_net(next_states_prep, goals_prep)
         A = rewards_tensor + (1 - rewards_tensor) * self.discount * next_v_value - pred_v_value
@@ -179,16 +197,7 @@ class AGO(BaseAgent):
                 'generator_loss': gen_loss.item(),
                 'discriminator_loss': dis_loss.item()}
 
-    def train_value_function(self, batch_size, reanalysis):
-        if reanalysis:
-            states, actions, next_states, goals = self.reanalysis_buffer.sample(batch_size, 0)
-        else:
-            states, actions, next_states, goals = self.replay_buffer.sample(batch_size, self.her_prob)
-        achieved_goals = self.get_goal_from_state(next_states)
-        rewards = self.compute_reward(achieved_goals, goals, None)[..., np.newaxis]
-        rewards_tensor = torch.tensor(rewards, dtype=torch.float32, device=self.device)
-        states_prep, _, next_states_prep, goals_prep = \
-            self.preprocess(states=states, next_states=next_states, goals=goals)
+    def train_value_function(self, states_prep, next_states_prep, goals_prep, rewards_tensor, batch_size):
         with torch.no_grad():
             v_next_value = self.v_target_net(next_states_prep, goals_prep)
             target_v_value = rewards_tensor + (1-rewards_tensor) * self.discount * v_next_value
@@ -201,21 +210,17 @@ class AGO(BaseAgent):
         self.v_training_steps += 1
         
         return {'v_loss': v_loss.item(),
-                'v_value': pred_v_value.mean().item()}
+                'v_value': pred_v_value.mean().item(), 
+                'v_value_std': pred_v_value.std().item()}
 
     def update_target_nets(self, net, target_net):
         for param, target_param in zip(net.parameters(), target_net.parameters()):
             target_param.data.copy_(0.005 * param.data + 0.995 * target_param.data)
 
-    def train_dynamics(self, batch_size):
-        states, actions, next_states, _ = self.replay_buffer.sample_sequence(batch_size, tau=5)
-        states_prep, actions_prep, next_states_prep, _ = \
-            self.preprocess(states=states.reshape(-1, self.state_dim), 
-                            actions=actions.reshape(-1, self.ac_dim), 
-                            next_states=next_states.reshape(-1, self.state_dim))
-        dynamics_info = self.dynamics.train_models(states_prep.reshape(batch_size, -1, self.state_dim), 
-                                                   actions_prep.reshape(batch_size, -1, self.ac_dim), 
-                                                   next_states_prep.reshape(batch_size, -1, self.state_dim))
+    def train_dynamics(self, states_prep, actions_prep, next_states_prep, batch_size):
+        dynamics_info = self.dynamics.train_models(states_prep.reshape(batch_size, self.state_dim), 
+                                                   actions_prep.reshape(batch_size, self.ac_dim), 
+                                                   next_states_prep.reshape(batch_size, self.state_dim))
         return dynamics_info
 
     def get_action(self, state, goal):
@@ -226,8 +231,8 @@ class AGO(BaseAgent):
         return action.cpu().numpy().squeeze()
 
     def plan(self, state, goal):
-        num_acs = 25
-        num_copies = 20
+        num_acs = 20
+        num_copies = 10
         max_steps = 20
 
         with torch.no_grad():
@@ -265,6 +270,47 @@ class AGO(BaseAgent):
             action = (gen_actions * np.exp(kappa * rewards[..., np.newaxis])).sum(axis=0) / \
                       np.exp(kappa * rewards[..., np.newaxis]).sum()
             return action
+    
+    def plan_gpu(self, state_tensor, goal_tensor, goal_np):
+        num_acs = 20
+        num_copies = 10
+        max_steps = 20
+
+        with torch.no_grad():
+            noise = torch.randn(num_acs, self.noise_dim, device=self.device)
+            state_tensor = state_tensor.repeat(num_acs, 1)
+            goal_tensor = goal_tensor.repeat(num_acs, 1)
+            gen_actions = self.generator(state_tensor, goal_tensor, noise)
+            pred_next_states = self.dynamics.predict(state_tensor, gen_actions, mean=False)
+
+            rep_goals = goal_tensor.repeat(num_copies, 1)
+            all_states = torch.zeros(num_acs * num_copies, max_steps + 1, self.state_dim, device=self.device)
+            all_states[:, 0] = pred_next_states.repeat(num_copies, 1)
+            for h in range(0, max_steps):
+                noise = torch.randn(num_acs * num_copies, self.noise_dim, device=self.device)
+                actions = self.generator(all_states[:, h], rep_goals, noise)
+                all_states[:, h+1] = self.dynamics.predict(all_states[:, h], actions, mean=False)
+            unnormalised_states, _, _, _ = self.postprocess(states=all_states.reshape(-1, self.state_dim))
+            achieved_goals = self.get_goal_from_state(unnormalised_states)
+
+            rewards = self.compute_reward(achieved_goals,
+                                          goal_np[np.newaxis].repeat(num_acs * num_copies * (max_steps + 1), axis=0), None)
+            rewards = rewards.reshape(num_copies, num_acs, max_steps + 1)
+            # discount
+            '''
+            gammas = np.ones(max_steps + 1)
+            for t in range(max_steps + 1):
+                gammas[t] = gammas[t] * (self.discount ** t)
+            rewards = rewards * gammas
+            '''
+            rewards = rewards.sum(axis=2).mean(axis=0)
+            rewards = torch.tensor(rewards[..., np.newaxis], dtype=torch.float32, device=self.device)
+            kappa = 2
+            rewards -= rewards.max()
+            action = (gen_actions * torch.exp(kappa * rewards)).sum(axis=0) / \
+                      torch.exp(kappa * rewards).sum()
+            return action
+
 
     def load(self, path):
         models = joblib.load(path)
