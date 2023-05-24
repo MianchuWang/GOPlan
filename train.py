@@ -15,8 +15,8 @@ from controller import Controller
 import logger
 
 parser = argparse.ArgumentParser()
-parser.add_argument('--env_name', type=str, default='SawyerDoor')
-parser.add_argument('--dataset', type=str, default='datasets/sawyer/expert/SawyerDoor')
+parser.add_argument('--env_name', type=str, default='FetchPickAndPlace')
+parser.add_argument('--dataset', type=str, default='datasets/gym/FetchPickAndPlace')
 parser.add_argument('--agent', type=str, default='ago')
 parser.add_argument('--buffer_capacity', type=int, default=4000000)
 parser.add_argument('--discount', type=float, default=0.98)
