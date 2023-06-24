@@ -31,7 +31,7 @@ class Controller:
             
             if (i + 1) % self.eval_every == 0:
                 policy_eval_info = self.eval('policy')
-                #plan_eval_info = self.eval('plan')
+                plan_eval_info = self.eval('plan')
                 logger.log('The performance after pretraining ' + str(i+1) + ' steps: ', policy_eval_info, plan_eval_info)
             
                 log_info = {**training_info, **policy_eval_info, **plan_eval_info}

@@ -9,7 +9,7 @@ from networks.networks import Generator, Discriminator, v_network
 from dynamics.dynamics import DynamicsModel
 from replay_buffer import ReplayBuffer
 
-class AGO(BaseAgent):
+class GOPlan(BaseAgent):
     def __init__(self, **agent_params):
         super().__init__(**agent_params)
 

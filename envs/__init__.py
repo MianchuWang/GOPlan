@@ -56,9 +56,7 @@ def return_environment(env_name, render_mode):
 
 
 def return_gym_robotics_env(env_name, render_mode):
-    # import gymnasium as gym
-    from wgcsl.envs.fetch_ood import FetchPickOODEnv, FetchPushOODEnv
-    
+    # import gymnasium as gym  
     class GymWrapper(gym.RewardWrapper):
         def reward(self, reward):
             # return = 1 if success else 0
@@ -66,8 +64,10 @@ def return_gym_robotics_env(env_name, render_mode):
     if 'OOD' in env_name:
         kwargs = get_ood_config(env_name)
         if 'Push' in env_name:
+            from wgcsl.envs.fetch_ood import FetchPushOODEnv
             env = FetchPushOODEnv(**kwargs)
         else:
+            from wgcsl.envs.fetch_ood import FetchPickOODEnv
             env = FetchPickOODEnv(**kwargs)
     else:
         print(env_name)

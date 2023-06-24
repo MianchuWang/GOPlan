@@ -3,54 +3,6 @@ import torch.nn as nn
 from torch.nn.utils.parametrizations import spectral_norm
 from torch.distributions.normal import Normal
 
-class AE(nn.Module):
-    def __init__(self, state_dim, goal_dim, latent_dim=32):
-        super().__init__()
-        self.encoder = nn.Sequential(nn.Linear(state_dim + goal_dim, 512),
-                                     nn.ReLU(),
-                                     nn.Linear(512, 512), 
-                                     nn.ReLU(),
-                                     nn.Linear(512, latent_dim))
-        self.decoder = nn.Sequential(nn.Linear(latent_dim, 512),
-                                     nn.ReLU(),
-                                     nn.Linear(512, 512),
-                                     nn.ReLU(),
-                                     nn.Linear(512, state_dim + goal_dim))
-    def forward(self, state, goal):
-        x = torch.cat([state, goal], dim=-1)
-        x = self.encoder(x)
-        x = self.decoder(x)
-        return x
-    
-    def encode(self, state, goal):
-        x = torch.cat([state, goal], dim=-1)
-        x = self.encoder(x)
-        return x
-'''
-class AE(nn.Module):
-    def __init__(self, state_dim, ac_dim, goal_dim, latent_dim=32):
-        super().__init__()
-        self.encoder = nn.Sequential(nn.Linear(state_dim + ac_dim + goal_dim, 512),
-                                     nn.ReLU(),
-                                     nn.Linear(512, 512), 
-                                     nn.ReLU(),
-                                     nn.Linear(512, latent_dim))
-        self.decoder = nn.Sequential(nn.Linear(latent_dim, 512),
-                                     nn.ReLU(),
-                                     nn.Linear(512, 512),
-                                     nn.ReLU(),
-                                     nn.Linear(512, state_dim + ac_dim + goal_dim))
-    def forward(self, state, action, goal):
-        x = torch.cat([state, action, goal], dim=-1)
-        x = self.encoder(x)
-        x = self.decoder(x)
-        return x
-    
-    def encode(self, state, action, goal):
-        x = torch.cat([state, action, goal], dim=-1)
-        x = self.encoder(x)
-        return x
-'''
 class Generator(nn.Module):
     def __init__(self, state_dim, ac_dim, goal_dim, noise_dim):
         super().__init__()
