@@ -15,7 +15,9 @@ This is the code for the paper *GOPlan: Goal-conditioned Offline Reinforcement L
 
 ## Supported Environments
 **Gym Robotics**:  FetchReach-v1, FetchPush-v1, FetchPickAndPlace-v1, FetchSlide-v1, HandReach-v0.
+
 **OOD Robotics**: FetchPushOOD-Right2Right-v1, FetchPushOOD-Left2Left-v1, FetchPushOOD-Left2Right-v1, FetchPushOOD-Right2Left-v1, FetchPickOOD-Right2Right-v1, FetchPickOOD-Right2Left-v1, FetchPickOOD-Left2Left-v1, FetchPickOOD-Left2Right-v1.
+
 **Others**: PointRooms, PointReach, SawyerReach, SawyerDoor, Reacher-v2.
 
 More details can be found in ```GOPlan/envs/__init__.py```.
@@ -46,6 +48,8 @@ More details can be found in ```GOPlan/envs/__init__.py```.
   
 ## Code References
 
-1. Rui Yang, Yiming Lu, Wenzhe Li, Hao Sun, Meng Fang, Yali Du, Xiu Li, Lei Han, & Chongjie Zhang (2022). Rethinking Goal-Conditioned Supervised Learning and Its Connection to Offline RL. In *International Conference on Learning Representations*. [[code]](https://github.com/YangRui2015/AWGCSL)
-2. Rui Yang, Lin Yong, Xiaoteng Ma, Hao Hu, Chongjie Zhang, & Tong Zhang (2023). What is Essential for Unseen Goal Generalization of Offline Goal-conditioned RL?. In *International Conference on Machine Learning*. [[code]](https://github.com/YangRui2015/GOAT)
+1. Rui Yang, Lin Yong, Xiaoteng Ma, Hao Hu, Chongjie Zhang, & Tong Zhang (2023). What is Essential for Unseen Goal Generalization of Offline Goal-conditioned RL?. In *International Conference on Machine Learning*. [[code]](https://github.com/YangRui2015/GOAT)
+  
+2. Rui Yang, Yiming Lu, Wenzhe Li, Hao Sun, Meng Fang, Yali Du, Xiu Li, Lei Han, & Chongjie Zhang (2022). Rethinking Goal-Conditioned Supervised Learning and Its Connection to Offline RL. In *International Conference on Learning Representations*. [[code]](https://github.com/YangRui2015/AWGCSL)
+
 3. Henry Charlesworth, Giovanni Montana (2020). PlanGAN: Model-based Planning With Sparse Rewards and Multiple Goals. In *Advances in Neural Information Processing Systems*. [[code]](https://github.com/henrycharlesworth/PlanGAN)
