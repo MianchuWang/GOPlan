@@ -40,7 +40,7 @@ class DynamicsModel(nn.Module):
         return {'dynamics_loss': loss.item()}
 
     def uncertainty(self, states, actions):
-        length = states.shape[0] - 1
+        length = states.shape[0]
         pred_states = torch.zeros(self.num_models, length, self.state_dim, device=self.device)
         for i in range(length):
             for k in range(self.num_models):

@@ -1,7 +1,7 @@
-# This gitignore template is from
-#
-# https://github.com/github/gitignore
-# The template is licensed under the Creative Commons Zero v1.0 Universal.
+# Experiment results
+wandb/
+experiments/
+datasets/
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

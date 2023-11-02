@@ -17,9 +17,8 @@ class GOPlan(BaseAgent):
         self.her_prob = 1.0
         self.beta = 60
         self.M = 10
-        self.c = 0
 
-        self.dynamics = DynamicsModel(3, self.state_dim, self.ac_dim, self.device)
+        self.dynamics = DynamicsModel(10, self.state_dim, self.ac_dim, self.device)
 
         self.generator = Generator(self.state_dim, self.ac_dim, self.goal_dim, self.noise_dim).to(device=self.device)
         self.discriminator = Discriminator(self.state_dim, self.ac_dim, self.goal_dim).to(device=self.device)
@@ -32,7 +31,8 @@ class GOPlan(BaseAgent):
         self.v_target_net = v_network(self.state_dim, self.goal_dim).to(device=self.device)
         self.v_target_net.load_state_dict(self.v_net.state_dict())
         self.v_net_opt = torch.optim.Adam(self.v_net.parameters(), lr=1e-3)
-        self.v_training_steps = 0
+        
+        self.training_steps = 0
         
         self.reanalysis_buffer = ReplayBuffer(buffer_size=2000000, state_dim=self.state_dim,
                                               ac_dim=self.ac_dim, goal_dim=self.goal_dim,
@@ -52,8 +52,10 @@ class GOPlan(BaseAgent):
         dynamics_info = self.train_dynamics(states_prep, actions_prep, next_states_prep, batch_size=512)
         gan_info = self.train_gan(states_prep, actions_prep, next_states_prep, goals_prep, rewards_tensor,batch_size=512)
         value_function_info = self.train_value_function(states_prep, next_states_prep, goals_prep, rewards_tensor, batch_size=512)
-        if self.v_training_steps % 2 == 0:
+        if self.training_steps % 2 == 0:
             self.update_target_nets(self.v_net, self.v_target_net)
+            
+        self.training_steps += 1
         return {**gan_info, **value_function_info, **dynamics_info}
 
     def finetune_models(self):
@@ -68,15 +70,16 @@ class GOPlan(BaseAgent):
 
         gan_info = self.train_gan(states_prep, actions_prep, next_states_prep, goals_prep, rewards_tensor, batch_size=512)
         value_function_info = self.train_value_function(states_prep, next_states_prep, goals_prep, rewards_tensor, batch_size=512)
-        if self.v_training_steps % 2 == 0:
+        if self.training_steps % 2 == 0:
             self.update_target_nets(self.v_net, self.v_target_net)
         return {**gan_info, **value_function_info}
-
+    
+    @torch.no_grad()
     def produce_inter_traj(self, num_traj):
         new_traj = 0
         uncertain_traj = 0
         failed_traj = 0
-        for _ in tqdm(range(num_traj)):
+        for _ in tqdm(range(num_traj), mininterval=1):
             state, goal = self.replay_buffer.sample_inter_reanalysis()
             pred_states = torch.zeros(self.max_steps, self.state_dim, device=self.device)
             pred_actions = torch.zeros(self.max_steps, self.ac_dim, device=self.device)
@@ -85,7 +88,7 @@ class GOPlan(BaseAgent):
             for i in range(self.max_steps - 1):
                 with torch.no_grad():
                     ac = self.plan_gpu(s, pred_goal, goal)
-                    ns = self.dynamics.predict(pred_states[i].unsqueeze(0), ac.unsqueeze(0), mean=True)
+                    ns = self.dynamics.predict(pred_states[i].unsqueeze(0), ac.unsqueeze(0), mean=False)
                 
                 pred_actions[i] = ac
                 pred_states[i+1] = ns
@@ -116,12 +119,13 @@ class GOPlan(BaseAgent):
         return {'inter new traj': new_traj / num_traj,
                 'inter uncertain traj': uncertain_traj / num_traj,
                 'inter failed traj': failed_traj / num_traj}
-
+    
+    @torch.no_grad()
     def produce_intra_traj(self, num_traj):
         new_traj = 0
         uncertain_traj = 0
         failed_traj = 0
-        for _ in tqdm(range(num_traj)):
+        for _ in tqdm(range(num_traj), mininterval=1):
             states, actions, next_states, goals = self.replay_buffer.sample_intra_reanalysis()
             pred_states = torch.zeros(states.shape[0], self.state_dim, device=self.device)
             pred_actions = torch.zeros(states.shape[0], self.ac_dim, device=self.device)
@@ -130,7 +134,7 @@ class GOPlan(BaseAgent):
             for i in range(states.shape[0] - 1):
                 with torch.no_grad():
                     ac = self.plan_gpu(s, pred_goal, goals[0])
-                    ns = self.dynamics.predict(pred_states[i].unsqueeze(0), ac.unsqueeze(0), mean=True)
+                    ns = self.dynamics.predict(pred_states[i].unsqueeze(0), ac.unsqueeze(0), mean=False)
                 
                 pred_actions[i] = ac
                 pred_states[i+1] = ns
@@ -170,7 +174,7 @@ class GOPlan(BaseAgent):
         pred_v_value = self.v_net(states_prep, goals_prep)
         next_v_value = self.v_net(next_states_prep, goals_prep)
         A = rewards_tensor + (1 - rewards_tensor) * self.discount * next_v_value - pred_v_value
-        clip_exp_A = torch.clamp(torch.exp(self.beta * A + self.c), 0, self.M)
+        clip_exp_A = torch.clamp(torch.exp(self.beta * A), 0, self.M)
         weights = clip_exp_A
 
         noise = torch.randn(batch_size, self.noise_dim, device=self.device)
@@ -207,8 +211,6 @@ class GOPlan(BaseAgent):
         v_loss.backward()
         self.v_net_opt.step()
 
-        self.v_training_steps += 1
-        
         return {'v_loss': v_loss.item(),
                 'v_value': pred_v_value.mean().item(), 
                 'v_value_std': pred_v_value.std().item()}
@@ -222,94 +224,60 @@ class GOPlan(BaseAgent):
                                                    actions_prep.reshape(batch_size, self.ac_dim), 
                                                    next_states_prep.reshape(batch_size, self.state_dim))
         return dynamics_info
-
+    
+    @torch.no_grad()
     def get_action(self, state, goal):
         with torch.no_grad():
             state_prep, _, _, goal_prep = self.preprocess(states=state[np.newaxis], goals=goal[np.newaxis])
             noise = torch.zeros(1, self.noise_dim, device=self.device)
             action = self.generator(state_prep, goal_prep, noise)
         return action.cpu().numpy().squeeze()
-
-    def plan(self, state, goal):
-        num_acs = 20
-        num_copies = 10
-        max_steps = 20
-
-        with torch.no_grad():
-            states_prep, _, _, goals_prep = self.preprocess(states=state[np.newaxis].repeat(num_acs, axis=0),
-                                                            goals=goal[np.newaxis].repeat(num_acs, axis=0))
-            noise = torch.randn(num_acs, self.noise_dim, device=self.device)
-            gen_actions = self.generator(states_prep, goals_prep, noise)
-            pred_next_states = self.dynamics.predict(states_prep, gen_actions, mean=False)
-
-            rep_goals = goals_prep.repeat(num_copies, 1)
-            all_states = torch.zeros(num_acs * num_copies, max_steps + 1, self.state_dim, device=self.device)
-            all_states[:, 0] = pred_next_states.repeat(num_copies, 1)
-
-            for h in range(0, max_steps):
-                noise = torch.randn(num_acs * num_copies, self.noise_dim, device=self.device)
-                actions = self.generator(all_states[:, h], rep_goals, noise)
-                all_states[:, h + 1] = self.dynamics.predict(all_states[:, h], actions, mean=False)
-            unnormalised_states, _, _, _ = self.postprocess(states=all_states.reshape(-1, self.state_dim))
-            achieved_goals = self.get_goal_from_state(unnormalised_states)
-
-            rewards = self.compute_reward(achieved_goals,
-                                          goal[np.newaxis].repeat(num_acs * num_copies * (max_steps + 1), axis=0),
-                                          None)
-            rewards = rewards.reshape(num_copies, num_acs, max_steps + 1)
-            # discount
-            '''
-            gammas = np.ones(max_steps + 1)
-            for t in range(max_steps + 1):
-                gammas[t] = gammas[t] * (self.discount ** t)
-            rewards = rewards * gammas
-            '''
-            rewards = rewards.sum(axis=2).mean(axis=0)
-            kappa = 2
-            gen_actions = gen_actions.cpu().numpy()
-            action = (gen_actions * np.exp(kappa * rewards[..., np.newaxis])).sum(axis=0) / \
-                      np.exp(kappa * rewards[..., np.newaxis]).sum()
-            return action
     
+    @torch.no_grad()
+    def plan(self, state, goal):
+        state_prep, _, _, goal_prep = self.preprocess(states=state[np.newaxis], goals=goal[np.newaxis])
+        action = self.plan_gpu(state_prep, goal_prep, goal).cpu().numpy()
+        return action
+    
+    @torch.no_grad()
     def plan_gpu(self, state_tensor, goal_tensor, goal_np):
         num_acs = 20
         num_copies = 10
         max_steps = 20
 
-        with torch.no_grad():
-            noise = torch.randn(num_acs, self.noise_dim, device=self.device)
-            state_tensor = state_tensor.repeat(num_acs, 1)
-            goal_tensor = goal_tensor.repeat(num_acs, 1)
-            gen_actions = self.generator(state_tensor, goal_tensor, noise)
-            pred_next_states = self.dynamics.predict(state_tensor, gen_actions, mean=False)
+        noise = torch.randn(num_acs, self.noise_dim, device=self.device)
+        state_tensor = state_tensor.repeat(num_acs, 1)
+        goal_tensor = goal_tensor.repeat(num_acs, 1)
+        gen_actions = self.generator(state_tensor, goal_tensor, noise)
+        pred_next_states = self.dynamics.predict(state_tensor, gen_actions, mean=False)
 
-            rep_goals = goal_tensor.repeat(num_copies, 1)
-            all_states = torch.zeros(num_acs * num_copies, max_steps + 1, self.state_dim, device=self.device)
-            all_states[:, 0] = pred_next_states.repeat(num_copies, 1)
-            for h in range(0, max_steps):
-                noise = torch.randn(num_acs * num_copies, self.noise_dim, device=self.device)
-                actions = self.generator(all_states[:, h], rep_goals, noise)
-                all_states[:, h+1] = self.dynamics.predict(all_states[:, h], actions, mean=False)
-            unnormalised_states, _, _, _ = self.postprocess(states=all_states.reshape(-1, self.state_dim))
-            achieved_goals = self.get_goal_from_state(unnormalised_states)
+        rep_goals = goal_tensor.repeat(num_copies, 1)
+        all_states = torch.zeros(num_acs * num_copies, max_steps + 1, self.state_dim, device=self.device)
+        all_states[:, 0] = pred_next_states.repeat(num_copies, 1)
+        for h in range(0, max_steps):
+            noise = torch.randn(num_acs * num_copies, self.noise_dim, device=self.device)
+            actions = self.generator(all_states[:, h], rep_goals, noise)
+            all_states[:, h+1] = self.dynamics.predict(all_states[:, h], actions, mean=False)
+        unnormalised_states, _, _, _ = self.postprocess(states=all_states.reshape(-1, self.state_dim))
+        achieved_goals = self.get_goal_from_state(unnormalised_states)
 
-            rewards = self.compute_reward(achieved_goals,
-                                          goal_np[np.newaxis].repeat(num_acs * num_copies * (max_steps + 1), axis=0), None)
-            rewards = rewards.reshape(num_copies, num_acs, max_steps + 1)
-            # discount
-            '''
-            gammas = np.ones(max_steps + 1)
-            for t in range(max_steps + 1):
-                gammas[t] = gammas[t] * (self.discount ** t)
-            rewards = rewards * gammas
-            '''
-            rewards = rewards.sum(axis=2).mean(axis=0)
-            rewards = torch.tensor(rewards[..., np.newaxis], dtype=torch.float32, device=self.device)
-            kappa = 2
-            rewards -= rewards.max()
-            action = (gen_actions * torch.exp(kappa * rewards)).sum(axis=0) / \
-                      torch.exp(kappa * rewards).sum()
-            return action
+        rewards = self.compute_reward(achieved_goals,
+                                      goal_np[np.newaxis].repeat(num_acs * num_copies * (max_steps + 1), axis=0), None)
+        rewards = rewards.reshape(num_copies, num_acs, max_steps + 1)
+        # discount
+        '''
+        gammas = np.ones(max_steps + 1)
+        for t in range(max_steps + 1):
+            gammas[t] = gammas[t] * (self.discount ** t)
+        rewards = rewards * gammas
+        '''
+        rewards = rewards.sum(axis=2).mean(axis=0)
+        rewards = torch.tensor(rewards[..., np.newaxis], dtype=torch.float32, device=self.device)
+        kappa = 2
+        rewards -= rewards.max()
+        action = (gen_actions * torch.exp(kappa * rewards)).sum(axis=0) / \
+                  torch.exp(kappa * rewards).sum()
+        return action
 
 
     def load(self, path):

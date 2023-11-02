@@ -11,9 +11,6 @@ gym_stack = ['FetchStack2']
 points_envs = ['PointRooms', 'PointReach', 'PointCross']
 sawyer_envs = ['SawyerReach', 'SawyerDoor']
 dmc_envs = ['Reacher-v2']
-d4rl_antmaze_envs = ['antmaze-umaze-v2', 'antmaze-umaze-diverse-v2',
-                     'antmaze-medium-play-v2', 'antmaze-medium-diverse-v2',
-                     'antmaze-large-play-v2', 'antmaze-large-diverse-v2']
 
 def get_goal_from_state(env_name):
     if env_name.startswith('FetchReach'):
@@ -47,8 +44,6 @@ def return_environment(env_name, render_mode):
         return return_gym_stack_env(env_name, render_mode)
     elif env_name in (sawyer_envs + points_envs + dmc_envs):
         return return_wgcsl_env(env_name, render_mode)
-    elif env_name in d4rl_antmaze_envs:
-        return return_d4rl_env(env_name, render_mode)
     else:
         raise Exception('Invalid environment.')
     
@@ -70,7 +65,6 @@ def return_gym_robotics_env(env_name, render_mode):
             from wgcsl.envs.fetch_ood import FetchPickOODEnv
             env = FetchPickOODEnv(**kwargs)
     else:
-        print(env_name)
         env = gym.make(env_name)
 
     return GymWrapper(env), \
@@ -141,34 +135,6 @@ def return_wgcsl_env(env_name, render_mode):
                  'max_steps': 50,
                  'get_goal_from_state': get_goal_from_state(env_name),
                  'compute_reward': env.compute_reward}
-
-def return_d4rl_env(env_name, render_mode):
-    import gym, d4rl
-    class AntWrapper(gym.ObservationWrapper):
-        ''' Wrapper for exposing the goals of the AntMaze environment. '''
-        def reset(self, seed, **kwargs):
-            """Resets the environment, returning a modified observation using :meth:`self.observation`."""
-            obs = self.env.reset(**kwargs)
-            return self.observation(obs), None
-        def observation(self, observation):
-            return {'observation': observation, 
-                    'achieved_goal': observation[:2],
-                    'desired_goal': np.array(self.env.target_goal)}
-        def compute_reward(self, achieved_goal, desired_goal, info):
-            reward = (np.linalg.norm(achieved_goal - desired_goal, axis=-1) <= 0.5).astype(np.float32)
-            return reward
-        @property
-        def max_episode_steps(self):
-            return self.env._max_episode_steps
-    env = gym.make(env_name)
-    return AntWrapper(env), {'env_name': env_name,
-                             'state_dim': env.observation_space.shape[0],
-                             'goal_dim': 2,
-                             'ac_dim': env.action_space.shape[0],
-                             'max_steps': env._max_episode_steps, 
-                             'get_goal_from_state': lambda x : x[..., :2],
-                             'compute_reward': lambda x, y, z: (np.linalg.norm(x - y, axis=-1) <= 0.5).astype(np.float32)}
-
 
 
 def get_ood_config(env_name):
