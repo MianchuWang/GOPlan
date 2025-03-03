@@ -38,18 +38,25 @@ More details can be found in ```GOPlan/envs/__init__.py```.
   ```
 * Run the following code to train [GCSL](https://arxiv.org/abs/1912.06088) agent on the FetchReach dataset:
   ```
-  $ python train.py --agent gcsl --env_name FetchReach-v0 --dataset GOPlan/datasets/FetchReach
+  $ python train.py --agent gcsl --env_name FetchReach-v1 --dataset GOPlan/datasets/FetchReach
   ```
-  * Run the following code to train [WGCSL](https://arxiv.org/abs/2202.04478) agent on the FetchReach dataset:
+* Run the following code to train [WGCSL](https://arxiv.org/abs/2202.04478) agent on the FetchReach dataset:
   ```
-  $ python train.py --agent wgcsl --env_name FetchReach-v0 --dataset GOPlan/datasets/FetchReach
+  $ python train.py --agent wgcsl --env_name FetchReach-v1 --dataset GOPlan/datasets/FetchReach
   ```
-  The code also supports [TD3BC](https://arxiv.org/abs/2106.06860), [contrastive RL](https://arxiv.org/abs/2206.07568), etc. More details can be found in ```GOPlan/agents/__init__.py```
+The code also supports [TD3BC](https://arxiv.org/abs/2106.06860), [contrastive RL](https://arxiv.org/abs/2206.07568), etc. More details can be found in ```GOPlan/agents/__init__.py```
   
-## Code References
+## Reference
 
-1. Rui Yang, Lin Yong, Xiaoteng Ma, Hao Hu, Chongjie Zhang, & Tong Zhang (2023). What is Essential for Unseen Goal Generalization of Offline Goal-conditioned RL?. In *International Conference on Machine Learning*. [[code]](https://github.com/YangRui2015/GOAT)
-  
-2. Rui Yang, Yiming Lu, Wenzhe Li, Hao Sun, Meng Fang, Yali Du, Xiu Li, Lei Han, & Chongjie Zhang (2022). Rethinking Goal-Conditioned Supervised Learning and Its Connection to Offline RL. In *International Conference on Learning Representations*. [[code]](https://github.com/YangRui2015/AWGCSL)
-
-3. Henry Charlesworth, Giovanni Montana (2020). PlanGAN: Model-based Planning With Sparse Rewards and Multiple Goals. In *Advances in Neural Information Processing Systems*. [[code]](https://github.com/henrycharlesworth/PlanGAN)
+If you find our research helpful, please cite our paper in Transactions on Machine Learning Research (TMLR):
+```
+@article{
+    wang2024goplan,
+    title={{GOP}lan: Goal-conditioned Offline Reinforcement Learning by Planning with Learned Models},
+    author={Mianchu Wang and Rui Yang and Xi Chen and Hao Sun and Meng Fang and Giovanni Montana},
+    journal={Transactions on Machine Learning Research},
+    issn={2835-8856},
+    year={2024},
+    url={https://openreview.net/forum?id=zOKAmm8R9B}
+}
+```
